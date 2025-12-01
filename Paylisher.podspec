@@ -18,11 +18,11 @@ Paylisher is a custom analytics and session replay SDK providing event tracking,
   # Eğer XCFramework kullanırsan burayı açacaksın:
   # s.vendored_frameworks = 'PaylisherFramework/PaylisherFramework.xcframework'
 
-  s.dependency 'FirebaseCore'
-  s.dependency 'FirebaseAuth'
-  s.dependency 'FirebaseDatabase'
-  s.dependency 'FirebaseFirestore'
-  s.dependency 'FirebaseAnalytics'
+  s.dependency 'FirebaseCore', '~> 11.0'
+  s.dependency 'FirebaseAuth', '~> 11.0'
+  s.dependency 'FirebaseDatabase', '~> 11.0'
+  s.dependency 'FirebaseFirestore', '~> 11.0'
+  s.dependency 'FirebaseAnalytics', '~> 11.0'
 
   s.swift_versions = ['5.7', '5.8', '5.9']
   s.requires_arc = true
