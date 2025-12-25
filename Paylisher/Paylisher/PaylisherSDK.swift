@@ -170,6 +170,97 @@ let maxRetryDelay = 30.0
     }
  
     
+
+    // ============================================
+    // MARK: - Deep Links (embedded in PaylisherSDK)
+    // ============================================
+
+    /// Handle incoming deep link URL
+    /// - Parameter url: The URL to handle
+    /// - Returns: True if URL was handled successfully
+    @objc @discardableResult
+    public func handleDeepLink(_ url: URL) -> Bool {
+        return PaylisherDeepLinkManager.shared.handleURL(url)
+    }
+
+    #if os(iOS)
+    /// Handle URL contexts from SceneDelegate (iOS 13+)
+    /// - Parameter urlContexts: URL contexts from scene delegate
+    @available(iOS 13.0, *)
+    @objc public func handleURLContexts(_ urlContexts: Set<UIOpenURLContext>) {
+        PaylisherDeepLinkManager.shared.handleURLContexts(urlContexts)
+    }
+    #endif
+
+    /// Handle Universal Link from NSUserActivity
+    /// - Parameter userActivity: The user activity containing the URL
+    /// - Returns: True if handled, false otherwise
+    @objc @discardableResult
+    public func handleUserActivity(_ userActivity: NSUserActivity) -> Bool {
+        return PaylisherDeepLinkManager.shared.handleUserActivity(userActivity)
+    }
+
+    // MARK: - Deep Link Configuration
+
+    /// Configure deep link handling
+    /// - Parameter config: Deep link configuration
+    @objc public func configureDeepLinks(_ config: PaylisherDeepLinkConfig) {
+        PaylisherDeepLinkManager.shared.config = config
+        PaylisherDeepLinkManager.shared.initialize()
+    }
+
+    /// Configure deep link handling with auth-required destinations
+    /// - Parameter destinations: List of destinations requiring authentication
+    @objc public func configureDeepLinks(authRequired destinations: [String]) {
+        PaylisherDeepLinkManager.shared.setupWithAuthDestinations(destinations)
+    }
+
+    /// Set deep link handler
+    /// - Parameter handler: Object conforming to PaylisherDeepLinkHandler protocol
+    @objc public func setDeepLinkHandler(_ handler: PaylisherDeepLinkHandler) {
+        PaylisherDeepLinkManager.shared.handler = handler
+        PaylisherDeepLinkManager.shared.initialize()
+    }
+
+    // MARK: - Pending Deep Link
+
+    /// Check if there's a pending deep link
+    @objc public var hasPendingDeepLink: Bool {
+        return PaylisherDeepLinkManager.shared.hasPendingDeepLink()
+    }
+
+    /// Get pending deep link destination
+    @objc public var pendingDeepLinkDestination: String? {
+        return PaylisherDeepLinkManager.shared.getPendingDestination()
+    }
+
+    /// Complete pending deep link after authentication
+    @objc public func completePendingDeepLink() {
+        PaylisherDeepLinkManager.shared.completePendingDeepLink()
+    }
+
+    /// Clear pending deep link
+    @objc public func clearPendingDeepLink() {
+        PaylisherDeepLinkManager.shared.clearPendingDeepLink()
+    }
+
+    /// Cancel pending deep link (captures "Deep Link Cancelled" event)
+    @objc public func cancelPendingDeepLink() {
+        PaylisherDeepLinkManager.shared.cancelPendingDeepLink()
+    }
+
+    // MARK: - Deep Link Info
+
+    /// Get last processed deep link
+    @objc public var lastDeepLink: PaylisherDeepLink? {
+        return PaylisherDeepLinkManager.shared.lastDeepLink
+    }
+
+    /// Get current pending deep link
+    @objc public var pendingDeepLink: PaylisherDeepLink? {
+        return PaylisherDeepLinkManager.shared.pendingDeepLink
+    }
+
     @objc public func getDistinctId() -> String {
         if !isEnabled() {
             return ""
@@ -333,6 +424,19 @@ let maxRetryDelay = 30.0
             #endif
         }
 
+        // ✅ JOURNEY TRACKING: Add jid (Journey ID) if available
+        if let jid = PaylisherJourneyContext.shared.getJourneyId() {
+            props["jid"] = jid
+
+            // Add journey metadata
+            if let source = PaylisherJourneyContext.shared.getJourneySource() {
+                props["journey_source"] = source
+            }
+            if let ageHours = PaylisherJourneyContext.shared.getJourneyAgeHours() {
+                props["journey_age_hours"] = ageHours
+            }
+        }
+
         // only Session Replay needs distinct_id also in the props
         // remove after https://github.com/Paylisher/paylisher/pull/18954 gets merged
         let propDistinctId = props["distinct_id"] as? String
@@ -367,6 +471,9 @@ let maxRetryDelay = 30.0
             self.resetViews()
         }
         PaylisherSessionManager.shared.startSession()
+
+        // ✅ JOURNEY TRACKING: Clear jid on reset (logout)
+        PaylisherJourneyContext.shared.clearJourneyId()
 
         // reload flags as anon user
         reloadFeatureFlags()

@@ -8,60 +8,36 @@
 import AuthenticationServices
 import Paylisher
 import SwiftUI
+import Combine
 
 class SignInViewModel: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
-    // MARK: - ASWebAuthenticationPresentationContextProviding
-/*
+
+    private var authSession: ASWebAuthenticationSession?
+
     func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        ASPresentationAnchor()
+        return UIApplication.shared.windows.first!
     }
 
     func triggerAuthentication() {
         guard let authURL = URL(string: "https://example.com/auth") else { return }
         let scheme = "exampleauth"
 
-        // Initialize the session.
-        let session = ASWebAuthenticationSession(url: authURL, callbackURLScheme: scheme) { callbackURL, error in
-            if callbackURL != nil {
-                print("URL", callbackURL!.absoluteString)
+        authSession = ASWebAuthenticationSession(url: authURL, callbackURLScheme: scheme) { [weak self] callbackURL, error in defer { self?.authSession = nil }
+            if let callbackURL = callbackURL {
+                print("URL", callbackURL.absoluteString)
             }
-            if error != nil {
-                print("Error", error!.localizedDescription)
-            }
-        }
-        session.presentationContextProvider = self
-        session.prefersEphemeralWebBrowserSession = true
-
-        session.start()
-    }*/
-    
-    private var authSession: ASWebAuthenticationSession?
-
-        func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-            return UIApplication.shared.windows.first!
-        }
-
-        func triggerAuthentication() {
-            guard let authURL = URL(string: "https://example.com/auth") else { return }
-            let scheme = "exampleauth"
-
-            authSession = ASWebAuthenticationSession(url: authURL, callbackURLScheme: scheme) { [weak self] callbackURL, error in defer { self?.authSession = nil }
-                if let callbackURL = callbackURL {
-                    print("URL", callbackURL.absoluteString)
-                }
-                if let error = error {
-                    print("Error", error.localizedDescription)
-                }
-
-                self?.authSession = nil
+            if let error = error {
+                print("Error", error.localizedDescription)
             }
 
-            authSession?.presentationContextProvider = self
-            authSession?.prefersEphemeralWebBrowserSession = true
-
-            authSession?.start()
+            self?.authSession = nil
         }
-    
+
+        authSession?.presentationContextProvider = self
+        authSession?.prefersEphemeralWebBrowserSession = true
+
+        authSession?.start()
+    }
 }
 
 class FeatureFlagsModel: ObservableObject {
@@ -95,7 +71,6 @@ struct YeniSayfaView: View {
             Text("Bu yeni bir sayfa!")
                 .font(.largeTitle)
                 .padding()
-                
 
             NavigationLink(destination: ContentView()) {
                 Text("Ana Sayfaya Dön")
@@ -107,7 +82,6 @@ struct YeniSayfaView: View {
             }
         }
         .navigationTitle("Yeni Sayfa")
-      
     }
 }
 
@@ -117,11 +91,15 @@ struct ContentView: View {
     @State private var showingSheet = false
     @State private var showingRedactedSheet = false
     @StateObject var api = Api()
-    @State private var deepLinkDestination: String?
     @StateObject var signInViewModel = SignInViewModel()
     @StateObject var featureFlagsModel = FeatureFlagsModel()
     
-        
+    // MARK: - Deep Link Navigation
+    @State private var deepLinkDestination: String?
+    @State private var cancellables = Set<AnyCancellable>()
+    
+    // Deep link bilgilerini göstermek için
+    @State private var lastDeepLinkInfo: String = "Henüz deep link alınmadı"
 
     func incCounter() {
         counter += 1
@@ -147,6 +125,63 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Deep Link Status Section
+                Section("Deep Link Durumu") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(lastDeepLinkInfo)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        if PaylisherSDK.shared.hasPendingDeepLink {
+                            HStack {
+                                Image(systemName: "clock.fill")
+                                    .foregroundColor(.orange)
+                                Text("Bekleyen: \(PaylisherSDK.shared.pendingDeepLinkDestination ?? "?")")
+                                    .foregroundColor(.orange)
+                            }
+                            
+                            HStack {
+                                Button("Tamamla") {
+                                    PaylisherSDK.shared.completePendingDeepLink()
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.green)
+                                
+                                Button("İptal") {
+                                    PaylisherSDK.shared.cancelPendingDeepLink()
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.red)
+                            }
+                        }
+                    }
+                    
+                    // Test Deep Link Butonları
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Test Deep Links:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        HStack {
+                            Button("yeniSayfa") {
+                                testDeepLink("myapp://yeniSayfa")
+                            }
+                            .buttonStyle(.bordered)
+                            
+                            Button("crashTest") {
+                                testDeepLink("myapp://crashTest")
+                            }
+                            .buttonStyle(.bordered)
+                            
+                            Button("wallet (auth)") {
+                                testDeepLink("myapp://wallet?auth=required")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.orange)
+                        }
+                    }
+                }
+                
                 Section("General") {
                     NavigationLink {
                         ContentView()
@@ -156,10 +191,6 @@ struct ContentView: View {
                     .paylisherMask()
 
                     Button("Test Error") {
-//                        throw NSError(domain: "com.example.test", code: 1, userInfo: [NSLocalizedDescriptionKey: "This is a test error event!"])
-                       // let array = [1, 2, 3]
-                        //let outOfBoundsValue = array[5]
-                        
                         testErrorLogging()
                     }
                     
@@ -197,16 +228,24 @@ struct ContentView: View {
                 }
                 
                 Section("Navigasyon") {
-                  
+                    NavigationLink(destination: CrashTestView(), tag: "CrashTestView", selection: $deepLinkDestination) {
+                        Text("Crash Test Sayfası")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.red)
+                            .cornerRadius(10)
+                    }
+                    
                     NavigationLink(destination: YeniSayfaView(), tag: "YeniSayfaView", selection: $deepLinkDestination) {
-                                        Text("Yeni Sayfaya Git")
-                                            .font(.headline)
-                                            .foregroundColor(.white)
-                                            .padding()
-                                            .background(Color.green)
-                                            .cornerRadius(10)
-                                    }
-                                }
+                        Text("Yeni Sayfaya Git")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.green)
+                            .cornerRadius(10)
+                    }
+                }
 
                 Section("Feature flags") {
                     HStack {
@@ -259,34 +298,76 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Paylisher")
-        }.onAppear {
+        }
+        .onAppear {
             api.listBeers(completion: { beers in
                 api.beers = beers
             })
             
-            
-            
+            // Deep link navigation publisher'ı dinle
+            setupDeepLinkListener()
         }
-        
+        // ============================================
+        // MARK: - Deep Link Handling (SDK ile)
+        // ============================================
         .onOpenURL { url in
-                   handleDeepLink(url: url)
-               }
+            print("📱 ContentView: onOpenURL - \(url)")
+            
+            // SDK'ya deep link'i işlet
+            // SDK otomatik olarak:
+            // 1. URL'i parse eder
+            // 2. "Deep Link Opened" eventi gönderir
+            // 3. Auth kontrolü yapar
+            // 4. Handler'ı çağırır (AppDelegate)
+            PaylisherSDK.shared.handleDeepLink(url)
+            
+            // UI'da göster
+            updateDeepLinkInfo(url)
+        }
     }
     
-    func handleDeepLink(url: URL) {
-           print("Açılan Deep Link: \(url)")
-           if url.scheme == "myapp", url.host == "yeniSayfa" {
-               deepLinkDestination = "YeniSayfaView"
-           }
-       }
+    // MARK: - Deep Link Helpers
     
-    // Define custom errors
+    /// AppDelegate'den gelen navigation eventlerini dinle
+    private func setupDeepLinkListener() {
+        AppDelegate.deepLinkNavigationPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { destination in
+                print("📱 ContentView: Navigation to \(destination)")
+                self.deepLinkDestination = destination
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Deep link bilgisini UI'da güncelle
+    private func updateDeepLinkInfo(_ url: URL) {
+        if let deepLink = PaylisherSDK.shared.lastDeepLink {
+            lastDeepLinkInfo = """
+            🔗 Son Deep Link:
+            URL: \(url.absoluteString)
+            Destination: \(deepLink.destination)
+            Scheme: \(deepLink.scheme)
+            Campaign: \(deepLink.campaignId ?? "-")
+            Params: \(deepLink.parameters)
+            """
+        }
+    }
+    
+    /// Test için deep link simüle et
+    private func testDeepLink(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        print("🧪 Test Deep Link: \(urlString)")
+        PaylisherSDK.shared.handleDeepLink(url)
+        updateDeepLinkInfo(url)
+    }
+    
+    // MARK: - Error Logging (Existing)
+    
     enum CustomError: Error {
         case invalidOperation
         case valueOutOfRange
     }
 
-    // Function that throws errors
     func performOperation(shouldThrow: Bool) throws {
         if shouldThrow {
             throw CustomError.invalidOperation
@@ -294,24 +375,19 @@ struct ContentView: View {
         print("Operation performed successfully.")
     }
     
-    // Testing function
     func testErrorLogging() {
         do {
-            // Intentionally triggering an error
             try performOperation(shouldThrow: true)
         } catch {
-            // Create error properties
             let properties: [String: Any] = [
                 "message": error.localizedDescription,
                 "cause": (error as NSError).userInfo["NSUnderlyingError"] ?? "None",
                 "stackTrace": Thread.callStackSymbols.joined(separator: "\n")
             ]
             print("testErrorLogging catch")
-            // Log the error
             PaylisherSDK.shared.capture("Error", properties: properties)
         }
     }
-    
 }
 
 struct ContentView_Previews: PreviewProvider {
