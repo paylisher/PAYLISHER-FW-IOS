@@ -47,6 +47,12 @@ import UIKit
     /// Raw query string
     @objc public let rawQuery: String?
 
+    /// Campaign key name extracted from URL (if present)
+    @objc public let campaignKeyName: String?
+
+    /// Resolved campaign data from backend (if available)
+    public var campaignData: PaylisherResolvedDeepLinkPayload?
+
     init(url: URL,
          scheme: String,
          destination: String,
@@ -55,7 +61,8 @@ import UIKit
          campaignId: String?,
          source: String?,
          jid: String?,
-         rawQuery: String?) {
+         rawQuery: String?,
+         campaignKeyName: String?) {
         self.url = url
         self.scheme = scheme
         self.destination = destination
@@ -66,6 +73,7 @@ import UIKit
         self.jid = jid
         self.timestamp = Date()
         self.rawQuery = rawQuery
+        self.campaignKeyName = campaignKeyName
         super.init()
     }
     
@@ -178,6 +186,13 @@ import UIKit
         if let jid = deepLink.jid {
             PaylisherJourneyContext.shared.setJourneyId(jid, source: "deeplink")
             log("Journey ID set: \(jid)")
+        }
+
+        // ✅ CAMPAIGN RESOLUTION: Fetch campaign data if keyName present
+        if let keyName = deepLink.campaignKeyName {
+            Task {
+                await resolveCampaign(for: deepLink, keyName: keyName)
+            }
         }
 
         // Capture event if enabled
@@ -333,6 +348,9 @@ import UIKit
         let source = parameters["source"] ?? parameters["utm_source"]
         let jid = parameters["jid"] // ✅ Journey ID for campaign attribution
 
+        // Extract campaign key name using PaylisherDeepLinkTracker's helper
+        let campaignKeyName = extractCampaignKey(from: url)
+
         return PaylisherDeepLink(
             url: url,
             scheme: scheme,
@@ -342,12 +360,101 @@ import UIKit
             campaignId: campaignId,
             source: source,
             jid: jid,
-            rawQuery: url.query
+            rawQuery: url.query,
+            campaignKeyName: campaignKeyName
         )
     }
     
+    // MARK: - Campaign Resolution
+
+    /// Resolve campaign data from backend using campaign key
+    private func resolveCampaign(for deepLink: PaylisherDeepLink, keyName: String) async {
+        do {
+            log("Resolving campaign: \(keyName)")
+
+            let campaignData = try await PaylisherCampaignAPI.resolve(keyName: keyName)
+            deepLink.campaignData = campaignData
+
+            log("Campaign resolved successfully: \(campaignData.title ?? "Unknown")")
+
+            // Track resolved campaign
+            PaylisherDeepLinkTracker.shared.logResolved(
+                url: deepLink.url,
+                source: deepLink.scheme,
+                resolved: campaignData
+            )
+
+            // If jid exists in campaign data, update journey context
+            if let jid = campaignData.jid {
+                PaylisherJourneyContext.shared.setJourneyId(jid, source: "campaign_resolution")
+                log("Journey ID updated from campaign: \(jid)")
+            }
+
+        } catch {
+            log("Failed to resolve campaign: \(error.localizedDescription)")
+
+            // Track resolution failure
+            PaylisherDeepLinkTracker.shared.logResolutionFailed(
+                url: deepLink.url,
+                source: deepLink.scheme,
+                keyName: keyName,
+                error: error
+            )
+        }
+    }
+
+    // MARK: - Campaign Key Extraction
+
+    /// Extract campaign key from URL
+    /// Supports: ?keyName=XXX, ?key=XXX, ?k=XXX, /campaign/XXX, /c/XXX, or single path component
+    private func extractCampaignKey(from url: URL) -> String? {
+        // 1️⃣ Query parameters
+        if let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems {
+            if let value = items.first(where: { $0.name == "keyName" })?.value, !value.isEmpty {
+                return value
+            }
+            if let value = items.first(where: { $0.name == "key" })?.value, !value.isEmpty {
+                return value
+            }
+            if let value = items.first(where: { $0.name == "k" })?.value, !value.isEmpty {
+                return value
+            }
+        }
+
+        // 2️⃣ Path components
+        let pathParts = url.pathComponents.filter { $0 != "/" }
+
+        // /campaign/XXX
+        if let index = pathParts.firstIndex(of: "campaign"),
+           pathParts.count > index + 1 {
+            let key = pathParts[index + 1]
+            if !key.isEmpty {
+                return key
+            }
+        }
+
+        // /c/XXX
+        if let index = pathParts.firstIndex(of: "c"),
+           pathParts.count > index + 1 {
+            let key = pathParts[index + 1]
+            if !key.isEmpty {
+                return key
+            }
+        }
+
+        // 3️⃣ Single path component (e.g., paylisher://X7kdi5Yq9lTVOv46uHYtV)
+        if pathParts.count == 1 {
+            let potentialKey = pathParts[0]
+            if potentialKey.count >= 10 {
+                return potentialKey
+            }
+        }
+
+        return nil
+    }
+
     // MARK: - Auth Check
-    
+
     /// Check if authentication is required for the deep link
     private func isAuthRequired(for deepLink: PaylisherDeepLink) -> Bool {
         // Check hardcoded list first (security)
@@ -414,20 +521,37 @@ import UIKit
         if let source = deepLink.source {
             properties["source"] = source
         }
-        
+
+        // ✅ Add campaign key name if present
+        if let keyName = deepLink.campaignKeyName {
+            properties["campaign_key"] = keyName
+            properties["has_campaign_key"] = true
+        } else {
+            properties["has_campaign_key"] = false
+        }
+
+        // ✅ Add resolved campaign data if available
+        if let campaignData = deepLink.campaignData {
+            let campaignProps = campaignData.toPropertiesDictionary()
+            properties.merge(campaignProps) { (_, new) in new }
+            properties["campaign_resolved"] = true
+        } else {
+            properties["campaign_resolved"] = false
+        }
+
         // Add all query parameters
         if !deepLink.parameters.isEmpty {
             properties["parameters"] = deepLink.parameters
         }
-        
+
         // Merge additional properties from config
         for (key, value) in config.additionalEventProperties {
             properties[key] = value
         }
-        
+
         // Capture event via Paylisher SDK
         PaylisherSDK.shared.capture("Deep Link Opened", properties: properties)
-        
+
         log("Captured 'Deep Link Opened' event")
     }
     
