@@ -101,6 +101,11 @@ struct ContentView: View {
     // Deep link bilgilerini göstermek için
     @State private var lastDeepLinkInfo: String = "Henüz deep link alınmadı"
 
+    // Journey tracking bilgileri
+    @State private var currentJourneyId: String = "Yok"
+    @State private var journeySource: String = "-"
+    @State private var journeyAgeHours: String = "-"
+
     func incCounter() {
         counter += 1
     }
@@ -125,13 +130,86 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Journey Tracking Section (NEW)
+                Section("🎯 Journey Tracking") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Journey ID:")
+                                .font(.caption)
+                                .bold()
+                            Spacer()
+                            Text(currentJourneyId)
+                                .font(.caption)
+                                .foregroundColor(currentJourneyId == "Yok" ? .secondary : .green)
+                        }
+
+                        HStack {
+                            Text("Source:")
+                                .font(.caption)
+                                .bold()
+                            Spacer()
+                            Text(journeySource)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Text("Age (hours):")
+                                .font(.caption)
+                                .bold()
+                            Spacer()
+                            Text(journeyAgeHours)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Divider()
+
+                        Text("Test Campaign Links:")
+                            .font(.caption)
+                            .bold()
+
+                        Button("🎁 Black Friday (jid=bf2025)") {
+                            testDeepLink("myapp://yeniSayfa?jid=bf2025&campaign_id=black-friday&utm_source=instagram")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.purple)
+
+                        Button("🎄 Winter Sale (jid=winter2025)") {
+                            testDeepLink("myapp://crashTest?jid=winter2025&campaign_id=winter-sale&utm_source=email")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.blue)
+
+                        Button("🌱 Organic Link (no jid)") {
+                            testDeepLink("myapp://yeniSayfa")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.green)
+
+                        Divider()
+
+                        Button("🔄 Refresh Journey Info") {
+                            updateJourneyInfo()
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("🗑️ Clear Journey (Simulate Logout)") {
+                            PaylisherSDK.shared.reset()
+                            updateJourneyInfo()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                    }
+                }
+
                 // MARK: - Deep Link Status Section
                 Section("Deep Link Durumu") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(lastDeepLinkInfo)
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        
+
                         if PaylisherSDK.shared.hasPendingDeepLink {
                             HStack {
                                 Image(systemName: "clock.fill")
@@ -139,14 +217,14 @@ struct ContentView: View {
                                 Text("Bekleyen: \(PaylisherSDK.shared.pendingDeepLinkDestination ?? "?")")
                                     .foregroundColor(.orange)
                             }
-                            
+
                             HStack {
                                 Button("Tamamla") {
                                     PaylisherSDK.shared.completePendingDeepLink()
                                 }
                                 .buttonStyle(.bordered)
                                 .tint(.green)
-                                
+
                                 Button("İptal") {
                                     PaylisherSDK.shared.cancelPendingDeepLink()
                                 }
@@ -155,24 +233,24 @@ struct ContentView: View {
                             }
                         }
                     }
-                    
+
                     // Test Deep Link Butonları
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Test Deep Links:")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        
+
                         HStack {
                             Button("yeniSayfa") {
                                 testDeepLink("myapp://yeniSayfa")
                             }
                             .buttonStyle(.bordered)
-                            
+
                             Button("crashTest") {
                                 testDeepLink("myapp://crashTest")
                             }
                             .buttonStyle(.bordered)
-                            
+
                             Button("wallet (auth)") {
                                 testDeepLink("myapp://wallet?auth=required")
                             }
@@ -303,9 +381,12 @@ struct ContentView: View {
             api.listBeers(completion: { beers in
                 api.beers = beers
             })
-            
+
             // Deep link navigation publisher'ı dinle
             setupDeepLinkListener()
+
+            // Journey bilgilerini yükle
+            updateJourneyInfo()
         }
         // ============================================
         // MARK: - Deep Link Handling (SDK ile)
@@ -342,14 +423,49 @@ struct ContentView: View {
     /// Deep link bilgisini UI'da güncelle
     private func updateDeepLinkInfo(_ url: URL) {
         if let deepLink = PaylisherSDK.shared.lastDeepLink {
-            lastDeepLinkInfo = """
+            var info = """
             🔗 Son Deep Link:
             URL: \(url.absoluteString)
             Destination: \(deepLink.destination)
             Scheme: \(deepLink.scheme)
             Campaign: \(deepLink.campaignId ?? "-")
-            Params: \(deepLink.parameters)
             """
+
+            if let jid = deepLink.jid {
+                info += "\n🎯 Journey ID: \(jid)"
+            } else {
+                info += "\n🌱 Organic (no jid)"
+            }
+
+            info += "\nParams: \(deepLink.parameters)"
+            lastDeepLinkInfo = info
+        }
+
+        // Journey bilgilerini de güncelle
+        updateJourneyInfo()
+    }
+
+    /// Journey tracking bilgilerini güncelle
+    private func updateJourneyInfo() {
+        // SDK'nın PaylisherJourneyContext'inden bilgileri al
+        // Not: PaylisherJourneyContext internal olduğu için UserDefaults'tan okuyoruz
+        if let jid = UserDefaults.standard.string(forKey: "paylisher_journey_id") {
+            currentJourneyId = jid
+
+            if let source = UserDefaults.standard.string(forKey: "paylisher_journey_source") {
+                journeySource = source
+            }
+
+            let timestamp = UserDefaults.standard.double(forKey: "paylisher_journey_id_timestamp")
+            if timestamp > 0 {
+                let ageSeconds = Date().timeIntervalSince1970 - timestamp
+                let ageHours = Int(ageSeconds / 3600)
+                journeyAgeHours = "\(ageHours)"
+            }
+        } else {
+            currentJourneyId = "Yok"
+            journeySource = "-"
+            journeyAgeHours = "-"
         }
     }
     
