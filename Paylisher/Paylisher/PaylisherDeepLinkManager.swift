@@ -192,12 +192,17 @@ import UIKit
         if let keyName = deepLink.campaignKeyName {
             Task {
                 await resolveCampaign(for: deepLink, keyName: keyName)
-            }
-        }
 
-        // Capture event if enabled
-        if config.captureDeepLinkEvents {
-            captureDeepLinkEvent(deepLink)
+                // Capture "Deep Link Opened" event AFTER campaign resolution
+                if self.config.captureDeepLinkEvents {
+                    self.captureDeepLinkEvent(deepLink)
+                }
+            }
+        } else {
+            // No campaign key - capture event immediately
+            if config.captureDeepLinkEvents {
+                captureDeepLinkEvent(deepLink)
+            }
         }
 
         // Check if auth is required
