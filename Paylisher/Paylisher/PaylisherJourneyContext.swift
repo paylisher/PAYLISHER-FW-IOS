@@ -7,6 +7,33 @@
 
 import Foundation
 
+/// Journey source enum for attribution tracking
+public enum PaylisherJourneySource {
+    case deeplink
+    case deferredDeeplink
+    case campaignResolution
+    case push
+    case email
+    case custom(String)
+
+    var rawValue: String {
+        switch self {
+        case .deeplink:
+            return "deeplink"
+        case .deferredDeeplink:
+            return "deferred_deeplink"
+        case .campaignResolution:
+            return "campaign_resolution"
+        case .push:
+            return "push"
+        case .email:
+            return "email"
+        case .custom(let value):
+            return value
+        }
+    }
+}
+
 /// Journey ID (jid) session manager - SDK Core Component
 /// Manages jid lifecycle across app sessions with TTL support
 class PaylisherJourneyContext {
@@ -69,8 +96,8 @@ class PaylisherJourneyContext {
     /// Set journey ID from deep link
     /// - Parameters:
     ///   - jid: Journey ID
-    ///   - source: Attribution source (e.g., "deeplink", "push", "email")
-    func setJourneyId(_ jid: String, source: String = "deeplink") {
+    ///   - source: Attribution source (e.g., .deeplink, .deferredDeeplink, .push, .email)
+    func setJourneyId(_ jid: String, source: PaylisherJourneySource = .deeplink) {
         lock.lock()
         defer { lock.unlock() }
 
@@ -86,11 +113,12 @@ class PaylisherJourneyContext {
         }
 
         currentJourneyId = jid
+        let sourceValue = source.rawValue
         storage.setString(forKey: journeyIdKey, value: jid)
         storage.setDouble(forKey: journeyIdTimestampKey, value: Date().timeIntervalSince1970)
-        storage.setString(forKey: journeySourceKey, value: source)
+        storage.setString(forKey: journeySourceKey, value: sourceValue)
 
-        hedgeLog("[JourneyContext] jid set: \(jid) (source: \(source))")
+        hedgeLog("[JourneyContext] jid set: \(jid) (source: \(sourceValue))")
     }
 
     /// Get current journey ID

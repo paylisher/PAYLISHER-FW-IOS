@@ -161,7 +161,17 @@ let maxRetryDelay = 30.0
             if config.preloadFeatureFlags {
                 reloadFeatureFlags()
             }
-            
+
+            // Setup deferred deep link manager if configured
+            if let deferredConfig = config.deferredDeepLinkConfig, deferredConfig.enabled {
+                PaylisherDeferredDeepLinkManager.setup(
+                    config: deferredConfig,
+                    apiKey: config.apiKey,
+                    sdkVersion: PaylisherSDK.version()
+                )
+                hedgeLog("[PaylisherSDK] Deferred Deep Link Manager initialized")
+            }
+
             // Configure Firebase
             // FirebaseApp.configure();
             // Set the global uncaught exception handler
@@ -1252,6 +1262,83 @@ let maxRetryDelay = 30.0
             return config.sessionReplay && isSessionActive() && (featureFlags?.isSessionReplayFlagActive() ?? false)
         }
     #endif
+
+    // MARK: - Deferred Deep Link
+
+    /**
+     * Checks for a deferred deep link match.
+     *
+     * This should be called in application:didFinishLaunchingWithOptions: to check
+     * if the app install should be attributed to a previous deep link click.
+     *
+     * Example:
+     * ```swift
+     * func application(_ application: UIApplication,
+     *                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+     *     // Setup SDK
+     *     PaylisherSDK.shared.setup(config)
+     *
+     *     // Check for deferred deep link
+     *     PaylisherSDK.shared.checkDeferredDeepLink(
+     *         onSuccess: { deepLink in
+     *             print("Deferred match: \(deepLink.url)")
+     *             // Auto-handled if autoHandleDeepLink = true
+     *         },
+     *         onNoMatch: {
+     *             print("No deferred match")
+     *         },
+     *         onError: { error in
+     *             print("Error: \(error)")
+     *         }
+     *     )
+     *
+     *     return true
+     * }
+     * ```
+     *
+     * @param onSuccess Called when a match is found. Receives the deferred deep link.
+     * @param onNoMatch Called when no match is found (normal first install).
+     * @param onError Called when an error occurs.
+     */
+    @objc public func checkDeferredDeepLink(
+        onSuccess: @escaping (PaylisherDeepLink) -> Void,
+        onNoMatch: @escaping () -> Void,
+        onError: @escaping (Error) -> Void
+    ) {
+        guard let deferredConfig = config.deferredDeepLinkConfig else {
+            hedgeLog("[PaylisherSDK] Deferred deep link not configured")
+            onNoMatch()
+            return
+        }
+
+        guard deferredConfig.enabled else {
+            hedgeLog("[PaylisherSDK] Deferred deep link disabled in config")
+            onNoMatch()
+            return
+        }
+
+        PaylisherDeferredDeepLinkManager.check(
+            config: deferredConfig,
+            apiKey: config.apiKey,
+            sdkVersion: PaylisherSDK.version(),
+            onSuccess: onSuccess,
+            onNoMatch: onNoMatch,
+            onError: onError
+        )
+    }
+
+    /**
+     * Resets deferred deep link check state (for testing only).
+     *
+     * ⚠️ WARNING: This is for testing purposes only!
+     */
+    public func resetDeferredDeepLinkForTesting() {
+        guard PaylisherDeferredDeepLinkManager.isSetup() else {
+            return
+        }
+
+        PaylisherDeferredDeepLinkManager.getInstance().resetForTesting()
+    }
 }
 
 // swiftlint:enable file_length cyclomatic_complexity
