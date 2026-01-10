@@ -326,7 +326,7 @@ public class PaylisherDeferredDeepLinkManager {
             return
         }
 
-        guard let deepLink = PaylisherDeepLinkManager.parseURL(url) else {
+        guard let deepLink = PaylisherDeepLinkManager.shared.parseURL(url) else {
             DispatchQueue.main.async {
                 onError(DeferredDeepLinkError.failedToParseURL)
             }

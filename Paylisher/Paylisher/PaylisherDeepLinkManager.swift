@@ -113,7 +113,12 @@ import UIKit
     // MARK: - Singleton
     
     @objc public static let shared = PaylisherDeepLinkManager()
-    
+
+    /// Check if DeepLinkManager is configured
+    @objc public static func isConfigured() -> Bool {
+        return shared.isInitialized
+    }
+
     // MARK: - Properties
     
     /// Configuration for deep link handling
@@ -184,7 +189,7 @@ import UIKit
 
         // ✅ JOURNEY TRACKING: Set jid if present
         if let jid = deepLink.jid {
-            PaylisherJourneyContext.shared.setJourneyId(jid, source: "deeplink")
+            PaylisherJourneyContext.shared.setJourneyId(jid, source: .deeplink)
             log("Journey ID set: \(jid)")
         }
 
@@ -320,7 +325,7 @@ import UIKit
     // MARK: - Parsing
     
     /// Parse URL into PaylisherDeepLink object
-    private func parseURL(_ url: URL) -> PaylisherDeepLink? {
+    internal func parseURL(_ url: URL) -> PaylisherDeepLink? {
         let scheme = url.scheme ?? ""
         
         // Determine destination based on URL type
@@ -391,7 +396,7 @@ import UIKit
 
             // If jid exists in campaign data, update journey context
             if let jid = campaignData.jid {
-                PaylisherJourneyContext.shared.setJourneyId(jid, source: "campaign_resolution")
+                PaylisherJourneyContext.shared.setJourneyId(jid, source: .campaignResolution)
                 log("Journey ID updated from campaign: \(jid)")
             }
 
