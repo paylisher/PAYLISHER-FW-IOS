@@ -77,7 +77,7 @@ let maxRetryDelay = 30.0
     }
 
     /// SDK Version
-    @objc public static func version() -> String {
+    @objc(sdkVersion) public static func version() -> String {
         return "1.6.0"
     }
 
