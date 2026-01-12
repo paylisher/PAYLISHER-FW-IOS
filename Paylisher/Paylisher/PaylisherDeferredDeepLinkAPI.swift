@@ -32,7 +32,7 @@ internal class PaylisherDeferredDeepLinkAPI {
 
     // MARK: - Constants
 
-    private static let defaultDeferredDeepLinkHost = "https://api.usepublisher.com/deferred-deeplink"
+    private static let defaultDeferredDeepLinkHost = "https://link.paylisher.com/v1/deferred-deeplink"
     private static let defaultTimeout: TimeInterval = 10.0 // 10 seconds
 
     // MARK: - Initialization
@@ -107,7 +107,7 @@ internal class PaylisherDeferredDeepLinkAPI {
     /**
      * Builds the API URL for deferred deep link check.
      *
-     * Format: https://api.usepublisher.com/deferred-deeplink?fingerprint={fingerprint}
+     * Format: https://link.paylisher.com/v1/deferred-deeplink?fingerprint={fingerprint}
      *
      * @param fingerprint Device fingerprint
      * @return Full API URL
