@@ -9,6 +9,7 @@ import Foundation
 import UIKit
 import AdSupport
 import AppTrackingTransparency
+import WebKit
 
 /**
  * Generates a unique device fingerprint for deferred deep link attribution.
@@ -56,34 +57,70 @@ internal class PaylisherDeviceFingerprint {
      * @return 64-character lowercase hex SHA-256 fingerprint string
      */
     func generateDeferredFingerprintV1() -> String {
+        print("========================================")
+        print("🔍 [Fingerprint V1] Starting generation")
+        print("========================================")
+
+        // Get UserAgent for logging (this is what backend sees in HTTP requests)
+        let userAgent = getUserAgent()
+        print("🌐 UserAgent String (from WKWebView):")
+        print("   \"\(userAgent)\"")
+        print("----------------------------------------")
+
         var components: [String] = []
 
         // 1. Device model (e.g., "iPhone", "iPad")
-        components.append(UIDevice.current.model)
+        let deviceModel = UIDevice.current.model
+        components.append(deviceModel)
+        print("📱 [1/5] Device Model: \(deviceModel)")
 
         // 2. OS version (e.g., "17.2")
-        components.append(UIDevice.current.systemVersion)
+        let osVersion = UIDevice.current.systemVersion
+        components.append(osVersion)
+        print("💿 [2/5] OS Version: \(osVersion)")
 
         // 3. Screen resolution (normalized for orientation)
         let bounds = UIScreen.main.bounds
         let width = bounds.width
         let height = bounds.height
+        print("📐 [3/5] Screen Raw Dimensions: width=\(width), height=\(height)")
 
         // Normalize: always use min x max to handle orientation changes
         let minDimension = Int(min(width, height))
         let maxDimension = Int(max(width, height))
-        components.append("\(minDimension)x\(maxDimension)")
+        let screenResolution = "\(minDimension)x\(maxDimension)"
+        components.append(screenResolution)
+        print("📐 [3/5] Screen Resolution (normalized): \(screenResolution)")
 
         // 4. Timezone identifier (e.g., "Europe/Istanbul")
-        components.append(TimeZone.current.identifier)
+        let timezone = TimeZone.current.identifier
+        components.append(timezone)
+        print("🌍 [4/5] Timezone: \(timezone)")
 
         // 5. Language code only (e.g., "tr", NOT "tr_TR")
         let languageCode = Locale.current.languageCode ?? "en"
         components.append(languageCode)
+        print("🗣️ [5/5] Language Code: \(languageCode)")
+
+        print("----------------------------------------")
+        print("📋 All Components (in order):")
+        for (index, component) in components.enumerated() {
+            print("   [\(index + 1)] \(component)")
+        }
 
         // Join with "|" and hash
         let combined = components.joined(separator: "|")
-        return sha256(combined)
+        print("----------------------------------------")
+        print("🔗 Combined String (before hash):")
+        print("   \"\(combined)\"")
+
+        let fingerprint = sha256(combined)
+        print("----------------------------------------")
+        print("🔐 SHA-256 Fingerprint:")
+        print("   \(fingerprint)")
+        print("========================================")
+
+        return fingerprint
     }
 
     /**
@@ -198,6 +235,25 @@ internal class PaylisherDeviceFingerprint {
     }
 
     // MARK: - Device Information
+
+    /**
+     * Gets UserAgent string (what backend sees in HTTP requests).
+     *
+     * This is useful for debugging fingerprint mismatches between iOS SDK and backend.
+     *
+     * @return UserAgent string
+     */
+    private func getUserAgent() -> String {
+        // Create a temporary UserAgent string matching what iOS sends in HTTP requests
+        let systemVersion = UIDevice.current.systemVersion.replacingOccurrences(of: ".", with: "_")
+        let deviceModel = UIDevice.current.model
+
+        // Standard iOS UserAgent format:
+        // "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+        let userAgent = "Mozilla/5.0 (\(deviceModel); CPU \(deviceModel) OS \(systemVersion) like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+
+        return userAgent
+    }
 
     /**
      * Gets device model (e.g., "iPhone14,2" for iPhone 13 Pro).

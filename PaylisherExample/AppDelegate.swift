@@ -29,7 +29,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         let PAYLISHER_API_KEY = "phc_zBfUgXiUDyWfnKofkz781HbmgD1H4C3q7U1tJpuF0Wj"
         let PAYLISHER_HOST = "https://ds.paylisher.com"
         let config = PaylisherConfig(apiKey: PAYLISHER_API_KEY, host: PAYLISHER_HOST)
-        
+
         config.captureScreenViews = true
         config.captureApplicationLifecycleEvents = true
         config.flushAt = 1
@@ -39,9 +39,39 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         config.sessionReplayConfig.screenshotMode = true
         config.sessionReplayConfig.maskAllTextInputs = false
         config.sessionReplayConfig.maskAllImages = false
-       
+
+        // Deferred Deep Link Config
+        config.deferredDeepLinkConfig = PaylisherDeferredDeepLinkConfig()
+        config.deferredDeepLinkConfig?.enabled = true
+        config.deferredDeepLinkConfig?.debugLogging = true
+        config.deferredDeepLinkConfig?.autoHandleDeepLink = true
+        config.deferredDeepLinkConfig?.includeIDFA = false // Test için IDFA kapalı
+
         PaylisherSDK.shared.setup(config)
-        
+
+        // ============================================
+        // MARK: - Deferred Deep Link Check
+        // ============================================
+
+        // İlk açılışta deferred deep link kontrolü yap
+        PaylisherSDK.shared.checkDeferredDeepLink(
+            onSuccess: { deepLink in
+                print("✅ [Deferred] Match found! URL: \(deepLink.url)")
+                print("✅ [Deferred] Destination: \(deepLink.destination)")
+                if let jid = deepLink.jid {
+                    print("✅ [Deferred] Journey ID: \(jid)")
+                }
+                // SDK otomatik olarak "Deferred Deep Link Matched" event'ini gönderir
+                // autoHandleDeepLink = true ise otomatik navigate eder
+            },
+            onNoMatch: {
+                print("ℹ️ [Deferred] No match found (organic install)")
+            },
+            onError: { error in
+                print("❌ [Deferred] Error: \(error.localizedDescription)")
+            }
+        )
+
         // ============================================
         // MARK: - Deep Link SDK Kurulumu
         // ============================================
