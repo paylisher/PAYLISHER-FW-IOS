@@ -36,9 +36,63 @@ import AppTrackingTransparency
 internal class PaylisherDeviceFingerprint {
 
     /**
+     * Generates a deferred deep link fingerprint (V1) that matches backend click-time fingerprint.
+     *
+     * IMPORTANT: This fingerprint MUST match exactly what backend generates at click-time.
+     * Backend cannot access IDFV/IDFA at click-time, so we use only publicly available device info.
+     *
+     * Algorithm (MUST match backend exactly):
+     * 1. Device model (UIDevice.current.model) - e.g., "iPhone", "iPad"
+     * 2. OS version (UIDevice.current.systemVersion) - e.g., "17.2"
+     * 3. Screen resolution (normalized) - e.g., "390x844" (min x max for orientation stability)
+     * 4. Timezone (TimeZone.current.identifier) - e.g., "Europe/Istanbul"
+     * 5. Language code (Locale.current.languageCode) - e.g., "tr" (NOT "tr_TR")
+     *
+     * Components are joined with "|" separator, then SHA-256 hashed to lowercase hex.
+     *
+     * Example raw string: "iPhone|17.2|390x844|Europe/Istanbul|tr"
+     * Example hash: "a1b2c3d4e5f6789abcdef123456789abcdef123456789abcdef123456789abcd"
+     *
+     * @return 64-character lowercase hex SHA-256 fingerprint string
+     */
+    func generateDeferredFingerprintV1() -> String {
+        var components: [String] = []
+
+        // 1. Device model (e.g., "iPhone", "iPad")
+        components.append(UIDevice.current.model)
+
+        // 2. OS version (e.g., "17.2")
+        components.append(UIDevice.current.systemVersion)
+
+        // 3. Screen resolution (normalized for orientation)
+        let bounds = UIScreen.main.bounds
+        let width = bounds.width
+        let height = bounds.height
+
+        // Normalize: always use min x max to handle orientation changes
+        let minDimension = Int(min(width, height))
+        let maxDimension = Int(max(width, height))
+        components.append("\(minDimension)x\(maxDimension)")
+
+        // 4. Timezone identifier (e.g., "Europe/Istanbul")
+        components.append(TimeZone.current.identifier)
+
+        // 5. Language code only (e.g., "tr", NOT "tr_TR")
+        let languageCode = Locale.current.languageCode ?? "en"
+        components.append(languageCode)
+
+        // Join with "|" and hash
+        let combined = components.joined(separator: "|")
+        return sha256(combined)
+    }
+
+    /**
      * Generates a SHA-256 hash of combined device identifiers.
      *
      * This method is async because IDFA retrieval may require user authorization prompt.
+     *
+     * NOTE: This rich fingerprint is NOT used for deferred deep link matching.
+     * Use generateDeferredFingerprintV1() for deferred deep link attribution.
      *
      * @param includeIDFA Whether to include IDFA (requires ATT authorization)
      * @return SHA-256 hash of device fingerprint, or nil if generation fails
