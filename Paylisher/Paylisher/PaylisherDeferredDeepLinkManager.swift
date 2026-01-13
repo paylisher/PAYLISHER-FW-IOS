@@ -171,14 +171,11 @@ public class PaylisherDeferredDeepLinkManager {
         onError: @escaping (Error) -> Void
     ) {
         // Prevent duplicate checks
+        // TEMPORARY: Disable duplicate check for testing
         lock.lock()
-        if isChecking || hasChecked {
-            lock.unlock()
-            if config.debugLogging {
-                hedgeLog("[PaylisherDeferredDeepLink] Already checked or checking")
-            }
-            return
-        }
+        print("⚠️ [DEBUG] Duplicate check DISABLED - hasChecked: \(hasChecked), isChecking: \(isChecking)")
+        // Reset flags for testing
+        hasChecked = false
         isChecking = true
         lock.unlock()
 
@@ -187,7 +184,11 @@ public class PaylisherDeferredDeepLinkManager {
         }
 
         // Check if this is first launch
-        if !firstLaunchDetector.isFirstLaunch() {
+        // TEMPORARY: Skip first launch check for testing - ALWAYS RUN
+        print("⚠️ [DEBUG] First launch check DISABLED for testing")
+        let isFirstLaunch = true  // FORCE true for testing
+
+        if !isFirstLaunch {
             if config.debugLogging {
                 hedgeLog("[PaylisherDeferredDeepLink] Not first launch, skipping")
             }
