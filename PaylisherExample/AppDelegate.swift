@@ -26,10 +26,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         //let PAYLISHER_API_KEY = "phc_JwUJI7MmnWguE6e211Ah0WMtedBQELE" // "<phc_test>"
         //let PAYLISHER_HOST = "https://analytics.paylisher.com" //"<https://test.paylisher.com>"
         //Diyetim Prod
-        let PAYLISHER_API_KEY = "phc_zBfUgXiUDyWfnKofkz781HbmgD1H4C3q7U1tJpuF0Wj"
-        let PAYLISHER_HOST = "https://ds.paylisher.com"
+        //let PAYLISHER_API_KEY = "phc_zBfUgXiUDyWfnKofkz781HbmgD1H4C3q7U1tJpuF0Wj"
+        //let PAYLISHER_HOST = "https://ds.paylisher.com"
+        
+        let PAYLISHER_API_KEY = "phc_3wZe1GW8GRdeUGQK0LqaS25PEDUNS9EBSxe7FiQFqQW"
+        let PAYLISHER_HOST = "https://ds-tr.paylisher.com"
         let config = PaylisherConfig(apiKey: PAYLISHER_API_KEY, host: PAYLISHER_HOST)
-
+        
+        
+        
         config.captureScreenViews = true
         config.captureApplicationLifecycleEvents = true
         config.flushAt = 1
@@ -115,10 +120,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         CoreDataManager.shared.configure(appGroupIdentifier: "group.com.paylisher.Paylisher")
         
         PaylisherSDK.shared.capture("App started!")
-        
-        PaylisherSDK.shared.capture("Logged in",
-                                    userProperties: ["Email": "kayarasimburak@gmail.com", "Name": "Rasim Burak", "Surname:": "Kaya", "Gender": "Male"],
-                                    userPropertiesSetOnce: ["date_of_first_log_in": "2025-23-01"])
+
+        // identify() artık ContentView'deki buton ile test ediliyor
 
         PaylisherSDK.shared.screen("App screen", properties: ["fromIcon": "bottom"])
 
@@ -219,14 +222,9 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                 return
             }
             print("token: \(token)")
-            
-            PaylisherSDK.shared.identify( "Test-iOS_",
-                                          userProperties :[
-                                            "name": "Paylisher iOS",
-                                            "email": "ios_soi@test.com",
-                                            "token": token
-                                          ],
-            userPropertiesSetOnce : ["birthday": "2024-03-01"])
+
+            // FCM token alındı - identify() butona taşındı
+            // İsteğe bağlı olarak token'ı user property olarak set edebilirsiniz
         }
     }
 }

@@ -127,6 +127,18 @@ struct ContentView: View {
         featureFlagsModel.reload()
     }
 
+    func testIdentify() {
+        PaylisherSDK.shared.identify("test_user_53",
+                                    userProperties: [ "Name": "Test User", "Surname:": "Kaya", "Gender": "Male"],
+                                    userPropertiesSetOnce: ["date_of_first_log_in": "2025-23-01"])
+        print("✅ Identify called: test_user_53")
+    }
+
+    func testReset() {
+        PaylisherSDK.shared.reset()
+        print("🔄 Reset called - distinct ID cleared, session reset, journey cleared")
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -304,7 +316,21 @@ struct ContentView: View {
                         Text("Trigger identify!")
                     }.paylisherViewSeen("Trigger identify")
                 }
-                
+
+                Section("Identify & Reset Test") {
+                    Button("🔐 Test Identify (test_user_53)") {
+                        testIdentify()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.blue)
+
+                    Button("🔄 Test Reset (Logout)") {
+                        testReset()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
+
                 Section("Navigasyon") {
                     NavigationLink(destination: CrashTestView(), tag: "CrashTestView", selection: $deepLinkDestination) {
                         Text("Crash Test Sayfası")
