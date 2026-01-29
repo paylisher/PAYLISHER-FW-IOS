@@ -141,6 +141,9 @@ import UIKit
     
     /// Callback for auth completion
     private var authCompletionCallback: ((Bool) -> Void)?
+
+    /// Deep link that is waiting for a handler to be set
+    @objc public private(set) var pendingHandlerDeepLink: PaylisherDeepLink?
     
     // MARK: - Initialization
     
@@ -155,6 +158,15 @@ import UIKit
         }
         isInitialized = true
         log("DeepLinkManager initialized")
+
+        // Check if there is a pending deep link waiting for handler
+        if let pending = pendingHandlerDeepLink {
+            log("Processing pending deep link that arrived before handler was set: \(pending.destination)")
+            // Clear it first to avoid loops if handler calls something that triggers this again (unlikely but safe)
+            pendingHandlerDeepLink = nil
+            // Process it
+            processDeepLink(pending)
+        }
     }
     
     // MARK: - Public Methods
@@ -187,6 +199,20 @@ import UIKit
         // Store last deep link
         lastDeepLink = deepLink
 
+        // If no handler is set, store it as pending
+        guard handler != nil else {
+            log("Deep link received but no handler set. Storing as pending for when handler is set: \(deepLink.destination)")
+            pendingHandlerDeepLink = deepLink
+            return true
+        }
+
+        // Process directly
+        processDeepLink(deepLink)
+        return true
+    }
+
+    /// Process a parsed deep link
+    private func processDeepLink(_ deepLink: PaylisherDeepLink) {
         // ✅ JOURNEY TRACKING: Set jid if present
         if let jid = deepLink.jid {
             PaylisherJourneyContext.shared.setJourneyId(jid, source: .deeplink)
@@ -236,8 +262,6 @@ import UIKit
         
         // Always notify handler
         handler?.paylisherDidReceiveDeepLink(deepLink, requiresAuth: requiresAuth)
-        
-        return true
     }
     
     /// Handle URL from SceneDelegate (iOS 13+)
