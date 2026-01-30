@@ -15,8 +15,8 @@ public enum PaylisherCampaignAPI {
     /// - Returns: Resolve edilmiş deeplink payload
     /// - Throws: Network veya decode hataları
     public static func resolve(keyName: String) async throws -> PaylisherResolvedDeepLinkPayload {
-        // Backend endpoint
-        let urlString = "https://api.usepublisher.com/campaign/\(keyName)"
+        // Backend endpoint - JSON dönen public resolve API
+        let urlString = "https://api.paylisher.com/campaign/resolve/\(keyName)"
 
         guard let url = URL(string: urlString) else {
             throw PaylisherCampaignAPIError.invalidURL

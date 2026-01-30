@@ -124,8 +124,10 @@ public struct PaylisherResolvedDeepLinkPayload: Codable {
     public let webUrl: String?
     public let iosUrl: String?
     public let androidUrl: String?
+    public let huaweiUrl: String?
     public let fallbackUrl: String?
     public let scheme: String?
+    public let iosUniversalUrl: String?
     public let webhookUrl: String?
     public let createdAt: PaylisherMongoDate?
     public let updatedAt: PaylisherMongoDate?
@@ -137,7 +139,7 @@ public struct PaylisherResolvedDeepLinkPayload: Codable {
     enum CodingKeys: String, CodingKey {
         case id = "_id"
         case teamId, projectId, sourceId, type, title, keyName
-        case webUrl, iosUrl, androidUrl, fallbackUrl, scheme, webhookUrl
+        case webUrl, iosUrl, androidUrl, huaweiUrl, fallbackUrl, scheme, iosUniversalUrl, webhookUrl
         case createdAt, updatedAt
         case v = "__v"
         case adId
@@ -160,8 +162,10 @@ public struct PaylisherResolvedDeepLinkPayload: Codable {
         props["webUrl"] = webUrl ?? ""
         props["iosUrl"] = iosUrl ?? ""
         props["androidUrl"] = androidUrl ?? ""
+        props["huaweiUrl"] = huaweiUrl ?? ""
         props["fallbackUrl"] = fallbackUrl ?? ""
         props["scheme"] = scheme ?? ""
+        props["iosUniversalUrl"] = iosUniversalUrl ?? ""
         props["webhookUrl"] = webhookUrl ?? ""
         props["createdAt"] = createdAt?.date ?? ""
         props["updatedAt"] = updatedAt?.date ?? ""
