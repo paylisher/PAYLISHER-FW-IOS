@@ -321,12 +321,48 @@ public class PaylisherDeferredDeepLinkManager {
             return
         }
 
-        // Parse deep link URL
-        guard let url = URL(string: deepLinkURL) else {
+        // Parse deep link URL and enrich with campaign parameters if missing
+        guard var urlComponents = URLComponents(string: deepLinkURL) else {
             DispatchQueue.main.async {
                 onError(DeferredDeepLinkError.failedToParseURL)
             }
             return
+        }
+
+        // Ensure keyName and jid are in the URL for proper tracking
+        var queryItems = urlComponents.queryItems ?? []
+
+        // Add keyName if not present and we have campaignKey from response
+        if let campaignKey = response.campaignKey,
+           !campaignKey.isEmpty,
+           !queryItems.contains(where: { $0.name == "keyName" || $0.name == "key" || $0.name == "k" }) {
+            queryItems.append(URLQueryItem(name: "keyName", value: campaignKey))
+            if config.debugLogging {
+                hedgeLog("[PaylisherDeferredDeepLink] Added keyName=\(campaignKey) to URL")
+            }
+        }
+
+        // Add jid if not present and we have jid from response
+        if let jid = response.jid,
+           !jid.isEmpty,
+           !queryItems.contains(where: { $0.name == "jid" }) {
+            queryItems.append(URLQueryItem(name: "jid", value: jid))
+            if config.debugLogging {
+                hedgeLog("[PaylisherDeferredDeepLink] Added jid=\(jid) to URL")
+            }
+        }
+
+        urlComponents.queryItems = queryItems.isEmpty ? nil : queryItems
+
+        guard let url = urlComponents.url else {
+            DispatchQueue.main.async {
+                onError(DeferredDeepLinkError.failedToParseURL)
+            }
+            return
+        }
+
+        if config.debugLogging {
+            hedgeLog("[PaylisherDeferredDeepLink] Enriched URL: \(url.absoluteString)")
         }
 
         guard let deepLink = PaylisherDeepLinkManager.shared.parseURL(url) else {
