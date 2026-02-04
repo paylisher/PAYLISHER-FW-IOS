@@ -2,7 +2,7 @@
 //  UIViewExample.swift
 //  PaylisherExample
 //
-//  Created by Rasim Burak Kaya on 10.04.2025.
+//  Created by Ben White on 17.03.23.
 //
 
 import Foundation

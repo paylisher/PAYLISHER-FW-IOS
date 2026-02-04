@@ -1,8 +1,10 @@
+// swiftlint:disable file_length cyclomatic_complexity
+
 //
 //  PaylisherSDK.swift
-//  Paylisher
+//  PaylisherSDK
 //
-//  Created by Rasim Burak Kaya on 10.04.2025.
+//  Created by Ben White on 07.02.23.
 //
 
 import Foundation
@@ -72,6 +74,11 @@ let maxRetryDelay = 30.0
         #if !os(watchOS)
             self.reachability?.stopNotifier()
         #endif
+    }
+
+    /// SDK Version
+    @objc(sdkVersion) public static func version() -> String {
+        return "1.6.0"
     }
 
     @objc public func debug(_ enabled: Bool = true) {
@@ -159,7 +166,17 @@ let maxRetryDelay = 30.0
             if config.preloadFeatureFlags {
                 reloadFeatureFlags()
             }
-            
+
+            // Setup deferred deep link manager if configured
+            if let deferredConfig = config.deferredDeepLinkConfig, deferredConfig.enabled {
+                PaylisherDeferredDeepLinkManager.setup(
+                    config: deferredConfig,
+                    apiKey: config.apiKey,
+                    sdkVersion: PaylisherSDK.version()
+                )
+                hedgeLog("[PaylisherSDK] Deferred Deep Link Manager initialized")
+            }
+
             // Configure Firebase
             // FirebaseApp.configure();
             // Set the global uncaught exception handler
@@ -168,6 +185,97 @@ let maxRetryDelay = 30.0
     }
  
     
+
+    // ============================================
+    // MARK: - Deep Links (embedded in PaylisherSDK)
+    // ============================================
+
+    /// Handle incoming deep link URL
+    /// - Parameter url: The URL to handle
+    /// - Returns: True if URL was handled successfully
+    @objc @discardableResult
+    public func handleDeepLink(_ url: URL) -> Bool {
+        return PaylisherDeepLinkManager.shared.handleURL(url)
+    }
+
+    #if os(iOS)
+    /// Handle URL contexts from SceneDelegate (iOS 13+)
+    /// - Parameter urlContexts: URL contexts from scene delegate
+    @available(iOS 13.0, *)
+    @objc public func handleURLContexts(_ urlContexts: Set<UIOpenURLContext>) {
+        PaylisherDeepLinkManager.shared.handleURLContexts(urlContexts)
+    }
+    #endif
+
+    /// Handle Universal Link from NSUserActivity
+    /// - Parameter userActivity: The user activity containing the URL
+    /// - Returns: True if handled, false otherwise
+    @objc @discardableResult
+    public func handleUserActivity(_ userActivity: NSUserActivity) -> Bool {
+        return PaylisherDeepLinkManager.shared.handleUserActivity(userActivity)
+    }
+
+    // MARK: - Deep Link Configuration
+
+    /// Configure deep link handling
+    /// - Parameter config: Deep link configuration
+    @objc public func configureDeepLinks(_ config: PaylisherDeepLinkConfig) {
+        PaylisherDeepLinkManager.shared.config = config
+        PaylisherDeepLinkManager.shared.initialize()
+    }
+
+    /// Configure deep link handling with auth-required destinations
+    /// - Parameter destinations: List of destinations requiring authentication
+    @objc public func configureDeepLinks(authRequired destinations: [String]) {
+        PaylisherDeepLinkManager.shared.setupWithAuthDestinations(destinations)
+    }
+
+    /// Set deep link handler
+    /// - Parameter handler: Object conforming to PaylisherDeepLinkHandler protocol
+    @objc public func setDeepLinkHandler(_ handler: PaylisherDeepLinkHandler) {
+        PaylisherDeepLinkManager.shared.handler = handler
+        PaylisherDeepLinkManager.shared.initialize()
+    }
+
+    // MARK: - Pending Deep Link
+
+    /// Check if there's a pending deep link
+    @objc public var hasPendingDeepLink: Bool {
+        return PaylisherDeepLinkManager.shared.hasPendingDeepLink()
+    }
+
+    /// Get pending deep link destination
+    @objc public var pendingDeepLinkDestination: String? {
+        return PaylisherDeepLinkManager.shared.getPendingDestination()
+    }
+
+    /// Complete pending deep link after authentication
+    @objc public func completePendingDeepLink() {
+        PaylisherDeepLinkManager.shared.completePendingDeepLink()
+    }
+
+    /// Clear pending deep link
+    @objc public func clearPendingDeepLink() {
+        PaylisherDeepLinkManager.shared.clearPendingDeepLink()
+    }
+
+    /// Cancel pending deep link (captures "Deep Link Cancelled" event)
+    @objc public func cancelPendingDeepLink() {
+        PaylisherDeepLinkManager.shared.cancelPendingDeepLink()
+    }
+
+    // MARK: - Deep Link Info
+
+    /// Get last processed deep link
+    @objc public var lastDeepLink: PaylisherDeepLink? {
+        return PaylisherDeepLinkManager.shared.lastDeepLink
+    }
+
+    /// Get current pending deep link
+    @objc public var pendingDeepLink: PaylisherDeepLink? {
+        return PaylisherDeepLinkManager.shared.pendingDeepLink
+    }
+
     @objc public func getDistinctId() -> String {
         if !isEnabled() {
             return ""
@@ -331,6 +439,19 @@ let maxRetryDelay = 30.0
             #endif
         }
 
+        // ✅ JOURNEY TRACKING: Add jid (Journey ID) if available
+        if let jid = PaylisherJourneyContext.shared.getJourneyId() {
+            props["jid"] = jid
+
+            // Add journey metadata
+            if let source = PaylisherJourneyContext.shared.getJourneySource() {
+                props["journey_source"] = source
+            }
+            if let ageHours = PaylisherJourneyContext.shared.getJourneyAgeHours() {
+                props["journey_age_hours"] = ageHours
+            }
+        }
+
         // only Session Replay needs distinct_id also in the props
         // remove after https://github.com/Paylisher/paylisher/pull/18954 gets merged
         let propDistinctId = props["distinct_id"] as? String
@@ -365,6 +486,9 @@ let maxRetryDelay = 30.0
             self.resetViews()
         }
         PaylisherSessionManager.shared.startSession()
+
+        // ✅ JOURNEY TRACKING: Clear jid on reset (logout)
+        PaylisherJourneyContext.shared.clearJourneyId()
 
         // reload flags as anon user
         reloadFeatureFlags()
@@ -1143,7 +1267,83 @@ let maxRetryDelay = 30.0
             return config.sessionReplay && isSessionActive() && (featureFlags?.isSessionReplayFlagActive() ?? false)
         }
     #endif
+
+    // MARK: - Deferred Deep Link
+
+    /**
+     * Checks for a deferred deep link match.
+     *
+     * This should be called in application:didFinishLaunchingWithOptions: to check
+     * if the app install should be attributed to a previous deep link click.
+     *
+     * Example:
+     * ```swift
+     * func application(_ application: UIApplication,
+     *                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+     *     // Setup SDK
+     *     PaylisherSDK.shared.setup(config)
+     *
+     *     // Check for deferred deep link
+     *     PaylisherSDK.shared.checkDeferredDeepLink(
+     *         onSuccess: { deepLink in
+     *             print("Deferred match: \(deepLink.url)")
+     *             // Auto-handled if autoHandleDeepLink = true
+     *         },
+     *         onNoMatch: {
+     *             print("No deferred match")
+     *         },
+     *         onError: { error in
+     *             print("Error: \(error)")
+     *         }
+     *     )
+     *
+     *     return true
+     * }
+     * ```
+     *
+     * @param onSuccess Called when a match is found. Receives the deferred deep link.
+     * @param onNoMatch Called when no match is found (normal first install).
+     * @param onError Called when an error occurs.
+     */
+    @objc public func checkDeferredDeepLink(
+        onSuccess: @escaping (PaylisherDeepLink) -> Void,
+        onNoMatch: @escaping () -> Void,
+        onError: @escaping (Error) -> Void
+    ) {
+        guard let deferredConfig = config.deferredDeepLinkConfig else {
+            hedgeLog("[PaylisherSDK] Deferred deep link not configured")
+            onNoMatch()
+            return
+        }
+
+        guard deferredConfig.enabled else {
+            hedgeLog("[PaylisherSDK] Deferred deep link disabled in config")
+            onNoMatch()
+            return
+        }
+
+        PaylisherDeferredDeepLinkManager.check(
+            config: deferredConfig,
+            apiKey: config.apiKey,
+            sdkVersion: PaylisherSDK.version(),
+            onSuccess: onSuccess,
+            onNoMatch: onNoMatch,
+            onError: onError
+        )
+    }
+
+    /**
+     * Resets deferred deep link check state (for testing only).
+     *
+     * ⚠️ WARNING: This is for testing purposes only!
+     */
+    public func resetDeferredDeepLinkForTesting() {
+        guard PaylisherDeferredDeepLinkManager.isSetup() else {
+            return
+        }
+
+        PaylisherDeferredDeepLinkManager.getInstance().resetForTesting()
+    }
 }
 
 // swiftlint:enable file_length cyclomatic_complexity
-

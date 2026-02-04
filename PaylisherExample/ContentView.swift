@@ -2,66 +2,42 @@
 //  ContentView.swift
 //  PaylisherExample
 //
-//  Created by Rasim Burak Kaya on 9.04.2025.
+//  Created by Ben White on 10.01.23.
 //
 
 import AuthenticationServices
 import Paylisher
 import SwiftUI
+import Combine
 
 class SignInViewModel: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
-    // MARK: - ASWebAuthenticationPresentationContextProviding
-/*
+
+    private var authSession: ASWebAuthenticationSession?
+
     func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        ASPresentationAnchor()
+        return UIApplication.shared.windows.first!
     }
 
     func triggerAuthentication() {
         guard let authURL = URL(string: "https://example.com/auth") else { return }
         let scheme = "exampleauth"
 
-        // Initialize the session.
-        let session = ASWebAuthenticationSession(url: authURL, callbackURLScheme: scheme) { callbackURL, error in
-            if callbackURL != nil {
-                print("URL", callbackURL!.absoluteString)
+        authSession = ASWebAuthenticationSession(url: authURL, callbackURLScheme: scheme) { [weak self] callbackURL, error in defer { self?.authSession = nil }
+            if let callbackURL = callbackURL {
+                print("URL", callbackURL.absoluteString)
             }
-            if error != nil {
-                print("Error", error!.localizedDescription)
-            }
-        }
-        session.presentationContextProvider = self
-        session.prefersEphemeralWebBrowserSession = true
-
-        session.start()
-    }*/
-    
-    private var authSession: ASWebAuthenticationSession?
-
-        func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {
-            return UIApplication.shared.windows.first!
-        }
-
-        func triggerAuthentication() {
-            guard let authURL = URL(string: "https://example.com/auth") else { return }
-            let scheme = "exampleauth"
-
-            authSession = ASWebAuthenticationSession(url: authURL, callbackURLScheme: scheme) { [weak self] callbackURL, error in defer { self?.authSession = nil }
-                if let callbackURL = callbackURL {
-                    print("URL", callbackURL.absoluteString)
-                }
-                if let error = error {
-                    print("Error", error.localizedDescription)
-                }
-
-                self?.authSession = nil
+            if let error = error {
+                print("Error", error.localizedDescription)
             }
 
-            authSession?.presentationContextProvider = self
-            authSession?.prefersEphemeralWebBrowserSession = true
-
-            authSession?.start()
+            self?.authSession = nil
         }
-    
+
+        authSession?.presentationContextProvider = self
+        authSession?.prefersEphemeralWebBrowserSession = true
+
+        authSession?.start()
+    }
 }
 
 class FeatureFlagsModel: ObservableObject {
@@ -95,7 +71,6 @@ struct YeniSayfaView: View {
             Text("Bu yeni bir sayfa!")
                 .font(.largeTitle)
                 .padding()
-                
 
             NavigationLink(destination: ContentView()) {
                 Text("Ana Sayfaya Dön")
@@ -107,7 +82,6 @@ struct YeniSayfaView: View {
             }
         }
         .navigationTitle("Yeni Sayfa")
-      
     }
 }
 
@@ -117,11 +91,20 @@ struct ContentView: View {
     @State private var showingSheet = false
     @State private var showingRedactedSheet = false
     @StateObject var api = Api()
-    @State private var deepLinkDestination: String?
     @StateObject var signInViewModel = SignInViewModel()
     @StateObject var featureFlagsModel = FeatureFlagsModel()
     
-        
+    // MARK: - Deep Link Navigation
+    @State private var deepLinkDestination: String?
+    @State private var cancellables = Set<AnyCancellable>()
+    
+    // Deep link bilgilerini göstermek için
+    @State private var lastDeepLinkInfo: String = "Henüz deep link alınmadı"
+
+    // Journey tracking bilgileri
+    @State private var currentJourneyId: String = "Yok"
+    @State private var journeySource: String = "-"
+    @State private var journeyAgeHours: String = "-"
 
     func incCounter() {
         counter += 1
@@ -144,9 +127,151 @@ struct ContentView: View {
         featureFlagsModel.reload()
     }
 
+    func testIdentify() {
+        PaylisherSDK.shared.identify("test_user_53",
+                                    userProperties: [ "Name": "Test User", "Surname:": "Kaya", "Gender": "Male"],
+                                    userPropertiesSetOnce: ["date_of_first_log_in": "2025-23-01"])
+        print("✅ Identify called: test_user_53")
+    }
+
+    func testReset() {
+        PaylisherSDK.shared.reset()
+        print("🔄 Reset called - distinct ID cleared, session reset, journey cleared")
+    }
+
     var body: some View {
         NavigationStack {
             List {
+                // MARK: - Journey Tracking Section (NEW)
+                Section("🎯 Journey Tracking") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Journey ID:")
+                                .font(.caption)
+                                .bold()
+                            Spacer()
+                            Text(currentJourneyId)
+                                .font(.caption)
+                                .foregroundColor(currentJourneyId == "Yok" ? .secondary : .green)
+                        }
+
+                        HStack {
+                            Text("Source:")
+                                .font(.caption)
+                                .bold()
+                            Spacer()
+                            Text(journeySource)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Text("Age (hours):")
+                                .font(.caption)
+                                .bold()
+                            Spacer()
+                            Text(journeyAgeHours)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Divider()
+
+                        Text("Test Campaign Links:")
+                            .font(.caption)
+                            .bold()
+
+                        Button("🎁 Black Friday (jid=bf2025)") {
+                            testDeepLink("myapp://yeniSayfa?jid=bf2025&campaign_id=black-friday&utm_source=instagram")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.purple)
+
+                        Button("🎄 Winter Sale (jid=winter2025)") {
+                            testDeepLink("myapp://crashTest?jid=winter2025&campaign_id=winter-sale&utm_source=email")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.blue)
+
+                        Button("🌱 Organic Link (no jid)") {
+                            testDeepLink("myapp://yeniSayfa")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.green)
+
+                        Divider()
+
+                        Button("🔄 Refresh Journey Info") {
+                            updateJourneyInfo()
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("🗑️ Clear Journey (Simulate Logout)") {
+                            PaylisherSDK.shared.reset()
+                            updateJourneyInfo()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                    }
+                }
+
+                // MARK: - Deep Link Status Section
+                Section("Deep Link Durumu") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(lastDeepLinkInfo)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        if PaylisherSDK.shared.hasPendingDeepLink {
+                            HStack {
+                                Image(systemName: "clock.fill")
+                                    .foregroundColor(.orange)
+                                Text("Bekleyen: \(PaylisherSDK.shared.pendingDeepLinkDestination ?? "?")")
+                                    .foregroundColor(.orange)
+                            }
+
+                            HStack {
+                                Button("Tamamla") {
+                                    PaylisherSDK.shared.completePendingDeepLink()
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.green)
+
+                                Button("İptal") {
+                                    PaylisherSDK.shared.cancelPendingDeepLink()
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(.red)
+                            }
+                        }
+                    }
+
+                    // Test Deep Link Butonları
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Test Deep Links:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        HStack {
+                            Button("yeniSayfa") {
+                                testDeepLink("myapp://yeniSayfa")
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("crashTest") {
+                                testDeepLink("myapp://crashTest")
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("wallet (auth)") {
+                                testDeepLink("myapp://wallet?auth=required")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.orange)
+                        }
+                    }
+                }
+                
                 Section("General") {
                     NavigationLink {
                         ContentView()
@@ -156,10 +281,6 @@ struct ContentView: View {
                     .paylisherMask()
 
                     Button("Test Error") {
-//                        throw NSError(domain: "com.example.test", code: 1, userInfo: [NSLocalizedDescriptionKey: "This is a test error event!"])
-                       // let array = [1, 2, 3]
-                        //let outOfBoundsValue = array[5]
-                        
                         testErrorLogging()
                     }
                     
@@ -195,18 +316,40 @@ struct ContentView: View {
                         Text("Trigger identify!")
                     }.paylisherViewSeen("Trigger identify")
                 }
-                
+
+                Section("Identify & Reset Test") {
+                    Button("🔐 Test Identify (test_user_53)") {
+                        testIdentify()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.blue)
+
+                    Button("🔄 Test Reset (Logout)") {
+                        testReset()
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
+
                 Section("Navigasyon") {
-                  
+                    NavigationLink(destination: CrashTestView(), tag: "CrashTestView", selection: $deepLinkDestination) {
+                        Text("Crash Test Sayfası")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.red)
+                            .cornerRadius(10)
+                    }
+                    
                     NavigationLink(destination: YeniSayfaView(), tag: "YeniSayfaView", selection: $deepLinkDestination) {
-                                        Text("Yeni Sayfaya Git")
-                                            .font(.headline)
-                                            .foregroundColor(.white)
-                                            .padding()
-                                            .background(Color.green)
-                                            .cornerRadius(10)
-                                    }
-                                }
+                        Text("Yeni Sayfaya Git")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.green)
+                            .cornerRadius(10)
+                    }
+                }
 
                 Section("Feature flags") {
                     HStack {
@@ -259,34 +402,114 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Paylisher")
-        }.onAppear {
+        }
+        .onAppear {
             api.listBeers(completion: { beers in
                 api.beers = beers
             })
-            
-            
-            
+
+            // Deep link navigation publisher'ı dinle
+            setupDeepLinkListener()
+
+            // Journey bilgilerini yükle
+            updateJourneyInfo()
         }
-        
+        // ============================================
+        // MARK: - Deep Link Handling (SDK ile)
+        // ============================================
         .onOpenURL { url in
-                   handleDeepLink(url: url)
-               }
+            print("📱 ContentView: onOpenURL - \(url)")
+            
+            // SDK'ya deep link'i işlet
+            // SDK otomatik olarak:
+            // 1. URL'i parse eder
+            // 2. "Deep Link Opened" eventi gönderir
+            // 3. Auth kontrolü yapar
+            // 4. Handler'ı çağırır (AppDelegate)
+            PaylisherSDK.shared.handleDeepLink(url)
+            
+            // UI'da göster
+            updateDeepLinkInfo(url)
+        }
     }
     
-    func handleDeepLink(url: URL) {
-           print("Açılan Deep Link: \(url)")
-           if url.scheme == "myapp", url.host == "yeniSayfa" {
-               deepLinkDestination = "YeniSayfaView"
-           }
-       }
+    // MARK: - Deep Link Helpers
     
-    // Define custom errors
+    /// AppDelegate'den gelen navigation eventlerini dinle
+    private func setupDeepLinkListener() {
+        AppDelegate.deepLinkNavigationPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { destination in
+                print("📱 ContentView: Navigation to \(destination)")
+                self.deepLinkDestination = destination
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Deep link bilgisini UI'da güncelle
+    private func updateDeepLinkInfo(_ url: URL) {
+        if let deepLink = PaylisherSDK.shared.lastDeepLink {
+            var info = """
+            🔗 Son Deep Link:
+            URL: \(url.absoluteString)
+            Destination: \(deepLink.destination)
+            Scheme: \(deepLink.scheme)
+            Campaign: \(deepLink.campaignId ?? "-")
+            """
+
+            if let jid = deepLink.jid {
+                info += "\n🎯 Journey ID: \(jid)"
+            } else {
+                info += "\n🌱 Organic (no jid)"
+            }
+
+            info += "\nParams: \(deepLink.parameters)"
+            lastDeepLinkInfo = info
+        }
+
+        // Journey bilgilerini de güncelle
+        updateJourneyInfo()
+    }
+
+    /// Journey tracking bilgilerini güncelle
+    private func updateJourneyInfo() {
+        // SDK'nın PaylisherJourneyContext'inden bilgileri al
+        // Not: PaylisherJourneyContext internal olduğu için UserDefaults'tan okuyoruz
+        if let jid = UserDefaults.standard.string(forKey: "paylisher_journey_id") {
+            currentJourneyId = jid
+
+            if let source = UserDefaults.standard.string(forKey: "paylisher_journey_source") {
+                journeySource = source
+            }
+
+            let timestamp = UserDefaults.standard.double(forKey: "paylisher_journey_id_timestamp")
+            if timestamp > 0 {
+                let ageSeconds = Date().timeIntervalSince1970 - timestamp
+                let ageHours = Int(ageSeconds / 3600)
+                journeyAgeHours = "\(ageHours)"
+            }
+        } else {
+            currentJourneyId = "Yok"
+            journeySource = "-"
+            journeyAgeHours = "-"
+        }
+    }
+    
+    /// Test için deep link simüle et
+    private func testDeepLink(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        print("🧪 Test Deep Link: \(urlString)")
+        PaylisherSDK.shared.handleDeepLink(url)
+        updateDeepLinkInfo(url)
+    }
+    
+    // MARK: - Error Logging (Existing)
+    
     enum CustomError: Error {
         case invalidOperation
         case valueOutOfRange
     }
 
-    // Function that throws errors
     func performOperation(shouldThrow: Bool) throws {
         if shouldThrow {
             throw CustomError.invalidOperation
@@ -294,24 +517,19 @@ struct ContentView: View {
         print("Operation performed successfully.")
     }
     
-    // Testing function
     func testErrorLogging() {
         do {
-            // Intentionally triggering an error
             try performOperation(shouldThrow: true)
         } catch {
-            // Create error properties
             let properties: [String: Any] = [
                 "message": error.localizedDescription,
                 "cause": (error as NSError).userInfo["NSUnderlyingError"] ?? "None",
                 "stackTrace": Thread.callStackSymbols.joined(separator: "\n")
             ]
             print("testErrorLogging catch")
-            // Log the error
             PaylisherSDK.shared.capture("Error", properties: properties)
         }
     }
-    
 }
 
 struct ContentView_Previews: PreviewProvider {
@@ -319,4 +537,3 @@ struct ContentView_Previews: PreviewProvider {
         ContentView()
     }
 }
-
