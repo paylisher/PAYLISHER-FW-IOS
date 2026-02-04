@@ -47,6 +47,11 @@ import UIKit
     /// Do not modify it, this flag is read and updated by the SDK via feature flags
     @objc public var snapshotEndpoint: String = "/s/"
 
+    /// Deferred Deep Link Configuration
+    /// Enable this to track install attribution via deferred deep links
+    /// Default: nil (disabled)
+    public var deferredDeepLinkConfig: PaylisherDeferredDeepLinkConfig?
+
     /// or EU Host: 'https://eu.i.paylisher.com'
     public static let defaultHost: String = "https://us.i.paylisher.com"
 
