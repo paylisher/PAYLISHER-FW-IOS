@@ -7,9 +7,13 @@
 
 #if os(iOS)
     import Foundation
+    #if canImport(SwiftUI)
     import SwiftUI
+    #endif
     import UIKit
+    #if canImport(WebKit)
     import WebKit
+    #endif
 
     class PaylisherReplayIntegration {
         private let config: PaylisherConfig
@@ -536,7 +540,10 @@
 
     private protocol AnyObjectUIHostingViewController: AnyObject {}
 
+    #if canImport(SwiftUI)
+    @available(iOS 13.0, *)
     extension UIHostingController: AnyObjectUIHostingViewController {}
+    #endif
 #endif
 
 // swiftlint:enable cyclomatic_complexity
