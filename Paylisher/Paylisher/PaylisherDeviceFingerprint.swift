@@ -9,7 +9,6 @@ import Foundation
 import UIKit
 import AdSupport
 import AppTrackingTransparency
-import WebKit
 
 /**
  * Generates a unique device fingerprint for deferred deep link attribution.
