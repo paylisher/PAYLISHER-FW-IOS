@@ -11,9 +11,7 @@
     import SwiftUI
     #endif
     import UIKit
-    #if canImport(WebKit)
-    import WebKit
-    #endif
+    // WebKit import removed - using runtime class loading instead to avoid _WebKit_SwiftUI dependency
 
     class PaylisherReplayIntegration {
         private let config: PaylisherConfig
@@ -191,10 +189,11 @@
                 }
             }
 
-            if let webView = view as? WKWebView { // Link, this code might never be reachable in SwiftUI, see swiftUIImageTypes instead
+            // WKWebView check using runtime class loading to avoid _WebKit_SwiftUI dependency
+            if let wkWebViewClass = NSClassFromString("WKWebView"), view.isKind(of: wkWebViewClass) {
                 // since we cannot mask the webview content, if masking texts or images are enabled
                 // we mask the whole webview as well
-                if isAnyInputSensitive(webView) {
+                if isAnyInputSensitive(view) {
                     maskableWidgets.append(view.toAbsoluteRect(parent))
                     return
                 }
@@ -439,7 +438,8 @@
                 setAlignment(label.textAlignment, style)
             }
 
-            if view is WKWebView {
+            // WKWebView check using runtime class loading to avoid _WebKit_SwiftUI dependency
+            if let wkWebViewClass = NSClassFromString("WKWebView"), view.isKind(of: wkWebViewClass) {
                 wireframe.type = "web_view"
             }
 
