@@ -1,69 +1,113 @@
 #!/bin/bash
 
-# 🎨 Renkli loglar
+# ============================================================================
+# Paylisher XCFramework Build Script
+# ============================================================================
+# Build Libraries for Distribution enabled static XCFramework builder
+# Supports backward compatibility for different Xcode/Swift versions
+# ============================================================================
+
+# Colors
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 set -e
 
-log_info() { echo -e "${GREEN}✅ [INFO] $1${NC}"; }
-log_warning() { echo -e "${YELLOW}⚠️ [WARNING] $1${NC}"; }
-log_error() { echo -e "${RED}❌ [ERROR] $1${NC}"; exit 1; }
+# ============================================================================
+# Functions
+# ============================================================================
+
+log_info() { echo -e "${GREEN}✅ $1${NC}"; }
+log_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+log_error() { echo -e "${RED}❌ $1${NC}"; exit 1; }
 log_section() {
-  echo -e "\n${CYAN}============================================"
-  echo -e "🚀 $1 🚀"
-  echo -e "============================================${NC}\n"
+    echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}🚀 $1${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 }
 
-# 📌 Script dizinini ve proje kökünü bul
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="/Volumes/Mac/PAYLISHER-FW-IOS"
-cd "$PROJECT_ROOT" || log_error "❌ Proje dizinine geçilemedi!"
-log_info "📁 Çalışma dizini: $PROJECT_ROOT"
+usage() {
+    echo "Usage: $0 [-s SCHEME_NAME]"
+    echo ""
+    echo "Options:"
+    echo "  -s    Scheme name (default: Paylisher)"
+    echo "  -h    Show this help"
+    exit 0
+}
 
-# Scheme adı sabit
+# ============================================================================
+# Parse Arguments
+# ============================================================================
+
 SCHEME_NAME="Paylisher"
 
-# 📌 Log Klasörü ve Dosyası
-LOG_DIR="$PROJECT_ROOT/build/logs"
-LOG_FILE="${LOG_DIR}/${SCHEME_NAME}_build.log"
+while getopts "s:h" opt; do
+    case $opt in
+        s) SCHEME_NAME="$OPTARG" ;;
+        h) usage ;;
+        *) usage ;;
+    esac
+done
 
-# Log dizini oluştur (yoksa)
+# ============================================================================
+# Configuration
+# ============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_ROOT" || log_error "Could not change to project directory!"
+
+BUILD_DIR="$PROJECT_ROOT/build"
+LOG_DIR="$BUILD_DIR/logs"
+LOG_FILE="$LOG_DIR/${SCHEME_NAME}_build.log"
+
+XCFRAMEWORK_OUTPUT="$BUILD_DIR/${SCHEME_NAME}.xcframework"
+IOS_ARCHIVE="$BUILD_DIR/ios_devices.xcarchive"
+SIMULATOR_ARCHIVE="$BUILD_DIR/ios_simulator.xcarchive"
+
+# Create directories
 mkdir -p "$LOG_DIR"
-
-# Eski log dosyası varsa sil
 rm -f "$LOG_FILE"
 touch "$LOG_FILE"
 
-# Build klasörleri
-BUILD_DIR="$PROJECT_ROOT/build"
-XCFRAMEWORK_OUTPUT="$BUILD_DIR/${SCHEME_NAME}.xcframework"
-IOS_ARCHIVE="$BUILD_DIR/ios.xcarchive"
-SIMULATOR_ARCHIVE="$BUILD_DIR/ios_simulator.xcarchive"
+log_section "Build Configuration"
+echo -e "  📁 Project Root:  $PROJECT_ROOT"
+echo -e "  🎯 Scheme:        $SCHEME_NAME"
+echo -e "  📦 Output:        $XCFRAMEWORK_OUTPUT"
+echo -e "  📝 Log:           $LOG_FILE"
+echo ""
 
-# 📌 Başlangıç temizliği
-log_section "🔄 [${SCHEME_NAME}] Temizleme işlemleri başlatılıyor"
+# ============================================================================
+# Clean
+# ============================================================================
 
-# Xcode build cache temizle
-log_info "🧹 [${SCHEME_NAME}] Xcode cache temizleniyor..."
+log_section "Cleaning Previous Builds"
+
+# Clean Xcode cache
+log_info "Cleaning Xcode build cache..."
 xcodebuild clean -project Paylisher.xcodeproj -scheme "$SCHEME_NAME" 2>&1 | tee -a "$LOG_FILE" || true
 
-# Eski XCFramework'ü yedekle
+# Backup existing XCFramework
 if [ -d "$XCFRAMEWORK_OUTPUT" ]; then
     BACKUP_NAME="${SCHEME_NAME}_$(date +%Y%m%d_%H%M%S).xcframework"
-    log_warning "⚠️ Mevcut XCFramework yedekleniyor: $BACKUP_NAME"
+    log_warning "Backing up existing XCFramework: $BACKUP_NAME"
     mv "$XCFRAMEWORK_OUTPUT" "$BUILD_DIR/$BACKUP_NAME"
 fi
 
-# Eski archive'ları temizle
+# Remove old archives
 rm -rf "$IOS_ARCHIVE" "$SIMULATOR_ARCHIVE"
+log_info "Cleanup complete"
 
-# 📌 1️⃣ iOS için archive oluştur (arm64)
-log_section "📦 [${SCHEME_NAME}] iOS cihazları için archive oluşturuluyor (arm64)"
+# ============================================================================
+# Build iOS Device Archive (arm64)
+# ============================================================================
+
+log_section "Building iOS Device Archive (arm64)"
+
 xcodebuild archive \
     -project Paylisher.xcodeproj \
     -scheme "$SCHEME_NAME" \
@@ -73,12 +117,16 @@ xcodebuild archive \
     SKIP_INSTALL=NO \
     BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
     ONLY_ACTIVE_ARCH=NO \
-    ARCHS="arm64" 2>&1 | tee -a "$LOG_FILE" || log_error "❌ iOS archive oluşturulamadı!"
+    ARCHS="arm64" 2>&1 | tee -a "$LOG_FILE" || log_error "iOS device archive failed!"
 
-log_info "✅ iOS archive başarıyla oluşturuldu: $IOS_ARCHIVE"
+log_info "iOS device archive completed"
 
-# 📌 2️⃣ iOS Simulator için archive oluştur (x86_64, arm64)
-log_section "📦 [${SCHEME_NAME}] iOS Simulator için archive oluşturuluyor (x86_64, arm64)"
+# ============================================================================
+# Build iOS Simulator Archive (x86_64 + arm64)
+# ============================================================================
+
+log_section "Building iOS Simulator Archive (x86_64, arm64)"
+
 xcodebuild archive \
     -project Paylisher.xcodeproj \
     -scheme "$SCHEME_NAME" \
@@ -88,64 +136,107 @@ xcodebuild archive \
     SKIP_INSTALL=NO \
     BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
     ONLY_ACTIVE_ARCH=NO \
-    ARCHS="x86_64 arm64" 2>&1 | tee -a "$LOG_FILE" || log_error "❌ iOS Simulator archive oluşturulamadı!"
+    ARCHS="x86_64 arm64" 2>&1 | tee -a "$LOG_FILE" || log_error "Simulator archive failed!"
 
-log_info "✅ iOS Simulator archive başarıyla oluşturuldu: $SIMULATOR_ARCHIVE"
+log_info "Simulator archive completed"
 
-# 📌 3️⃣ XCFramework oluştur
-log_section "🛠️ [${SCHEME_NAME}] XCFramework oluşturuluyor"
+# ============================================================================
+# Create XCFramework
+# ============================================================================
+
+log_section "Creating XCFramework"
+
 xcodebuild -create-xcframework \
     -framework "$IOS_ARCHIVE/Products/Library/Frameworks/${SCHEME_NAME}.framework" \
     -framework "$SIMULATOR_ARCHIVE/Products/Library/Frameworks/${SCHEME_NAME}.framework" \
-    -output "$XCFRAMEWORK_OUTPUT" 2>&1 | tee -a "$LOG_FILE" || log_error "❌ XCFramework oluşturulamadı!"
+    -output "$XCFRAMEWORK_OUTPUT" 2>&1 | tee -a "$LOG_FILE" || log_error "XCFramework creation failed!"
 
-log_info "✅ XCFramework başarıyla oluşturuldu: $XCFRAMEWORK_OUTPUT"
+log_info "XCFramework created successfully"
 
-# 📌 4️⃣ Swift Interface dosyalarını kontrol et
-log_section "🔍 Swift Interface Dosyaları Kontrolü"
-SWIFTINTERFACE_FILES=$(find "$XCFRAMEWORK_OUTPUT" -name "*.swiftinterface" 2>/dev/null)
+# ============================================================================
+# Validation
+# ============================================================================
 
+log_section "Validating XCFramework"
+
+# Check 1: Swift Interface exists
+log_info "Checking Swift interface files..."
+SWIFTINTERFACE_FILES=$(find "$XCFRAMEWORK_OUTPUT" -name "*.swiftinterface" 2>/dev/null | head -5)
 if [ -n "$SWIFTINTERFACE_FILES" ]; then
-    log_info "✅ Swift interface dosyaları bulundu:"
+    echo "  Found swift interfaces:"
     echo "$SWIFTINTERFACE_FILES" | while read -r file; do
-        echo "  📄 $file"
+        echo "    📄 $(basename "$file")"
     done
-    
-    # _WebKit_SwiftUI kontrolü
-    log_info "🔎 _WebKit_SwiftUI import kontrolü yapılıyor..."
-    if grep -r "_WebKit_SwiftUI" "$XCFRAMEWORK_OUTPUT" 2>/dev/null; then
-        log_warning "⚠️ _WebKit_SwiftUI import'u bulundu! Bu geriye dönük uyumluluk sorununa yol açabilir."
-    else
-        log_info "✅ _WebKit_SwiftUI import'u bulunamadı. Geriye dönük uyumluluk iyi durumda."
-    fi
 else
-    log_warning "⚠️ Swift interface dosyası bulunamadı."
+    log_warning "No Swift interface files found!"
 fi
 
-# 📌 5️⃣ XCFramework bilgilerini göster
-log_section "📊 XCFramework Detayları"
-log_info "📦 Framework yapısı:"
-tree -L 3 "$XCFRAMEWORK_OUTPUT" 2>/dev/null || find "$XCFRAMEWORK_OUTPUT" -maxdepth 3 -print
+# Check 2: _WebKit_SwiftUI import (CRITICAL)
+log_info "Checking for _WebKit_SwiftUI import (CRITICAL)..."
+if grep -r "_WebKit_SwiftUI" "$XCFRAMEWORK_OUTPUT" 2>/dev/null; then
+    echo ""
+    log_error "_WebKit_SwiftUI import found! This will break backward compatibility."
+else
+    log_info "No _WebKit_SwiftUI import found ✅"
+fi
 
-# Framework boyutunu göster
+# Check 3: Static library verification
+log_info "Verifying static library..."
+BINARY_PATH=$(find "$XCFRAMEWORK_OUTPUT" -name "$SCHEME_NAME" -type f | head -1)
+if [ -n "$BINARY_PATH" ]; then
+    FILE_TYPE=$(file "$BINARY_PATH")
+    if echo "$FILE_TYPE" | grep -q "ar archive"; then
+        log_info "Library type: Static (ar archive) ✅"
+    elif echo "$FILE_TYPE" | grep -q "Mach-O"; then
+        log_warning "Library type: Dynamic (Mach-O) - Expected static!"
+    else
+        log_warning "Unknown library type: $FILE_TYPE"
+    fi
+else
+    log_warning "Could not find binary for type check"
+fi
+
+# Check 4: Swift compiler version
+log_info "Swift interface header info:"
+FIRST_INTERFACE=$(echo "$SWIFTINTERFACE_FILES" | head -1)
+if [ -n "$FIRST_INTERFACE" ]; then
+    head -5 "$FIRST_INTERFACE" | while read -r line; do
+        echo "    $line"
+    done
+fi
+
+# ============================================================================
+# Summary
+# ============================================================================
+
+log_section "Build Complete"
+
 FRAMEWORK_SIZE=$(du -sh "$XCFRAMEWORK_OUTPUT" | cut -f1)
-log_info "📏 XCFramework boyutu: $FRAMEWORK_SIZE"
 
-# Static library kontrolü
-log_info "🔍 Library türü kontrolü:"
-find "$XCFRAMEWORK_OUTPUT" -name "Paylisher" -type f | while read -r binary; do
-    FILE_TYPE=$(file "$binary")
-    echo "  📄 $binary"
-    echo "     ➜ $FILE_TYPE"
-done
+# Compute checksum
+CHECKSUM=""
+if [ -f "$XCFRAMEWORK_OUTPUT/../${SCHEME_NAME}.xcframework.zip" ]; then
+    rm "$XCFRAMEWORK_OUTPUT/../${SCHEME_NAME}.xcframework.zip"
+fi
+cd "$BUILD_DIR"
+zip -r -q "${SCHEME_NAME}.xcframework.zip" "${SCHEME_NAME}.xcframework"
+CHECKSUM=$(swift package compute-checksum "${SCHEME_NAME}.xcframework.zip" 2>/dev/null || shasum -a 256 "${SCHEME_NAME}.xcframework.zip" | cut -d' ' -f1)
+cd "$PROJECT_ROOT"
 
-# 📌 6️⃣ Archive dosyalarını temizle (opsiyonel, kapatılabilir)
-log_info "🧹 Archive dosyaları temizleniyor..."
+echo -e "${BOLD}${GREEN}🎉 XCFramework Build Successful!${NC}"
+echo ""
+echo -e "  📦 ${BOLD}Output:${NC}     $XCFRAMEWORK_OUTPUT"
+echo -e "  📏 ${BOLD}Size:${NC}       $FRAMEWORK_SIZE"
+echo -e "  🔑 ${BOLD}Checksum:${NC}   $CHECKSUM"
+echo -e "  📝 ${BOLD}Log:${NC}        $LOG_FILE"
+echo ""
+
+# Cleanup archives
+log_info "Cleaning up archive files..."
 rm -rf "$IOS_ARCHIVE" "$SIMULATOR_ARCHIVE"
 
-# 📌 ✅ İşlem tamamlandı
-log_section "✅ [${SCHEME_NAME}] İşlem tamamlandı!"
-echo -e "${BOLD}${GREEN}🎉 XCFramework başarıyla oluşturuldu:${NC}"
-echo -e "${BOLD}   📦 $XCFRAMEWORK_OUTPUT${NC}"
-echo -e "\n${CYAN}📝 Build log:${NC} $LOG_FILE"
-echo -e "${CYAN}💾 Boyut:${NC} $FRAMEWORK_SIZE\n"
+echo -e "\n${CYAN}📋 Next Steps:${NC}"
+echo "  1. Test import in Xcode 16.x project"
+echo "  2. Update Package.swift checksum if publishing"
+echo "  3. Create GitHub release with ${SCHEME_NAME}.xcframework.zip"
+echo ""
