@@ -523,7 +523,8 @@
             var screenName: String?
             if let controller = window.rootViewController {
                 // SwiftUI only supported with screenshotMode
-                if controller is AnyObjectUIHostingViewController, !config.sessionReplayConfig.screenshotMode {
+                // Using runtime type check instead of protocol conformance to avoid _WebKit_SwiftUI dependency
+                if isHostingController(controller), !config.sessionReplayConfig.screenshotMode {
                     hedgeLog("SwiftUI snapshot not supported, enable screenshotMode.")
                     return
                         // screen name only makes sense if we are not using SwiftUI
@@ -536,14 +537,15 @@
             // this method has to be fast and do as little as possible
             generateSnapshot(window, screenName)
         }
+        
+        /// Checks if controller is UIHostingController using runtime type inspection
+        /// This approach avoids compile-time SwiftUI dependency that causes _WebKit_SwiftUI leak
+        private func isHostingController(_ controller: UIViewController) -> Bool {
+            let typeName = String(describing: type(of: controller))
+            // UIHostingController appears as "UIHostingController<SomeView>" or similar
+            return typeName.contains("UIHostingController") || typeName.contains("HostingController")
+        }
     }
-
-    private protocol AnyObjectUIHostingViewController: AnyObject {}
-
-    #if canImport(SwiftUI)
-    @available(iOS 13.0, *)
-    extension UIHostingController: AnyObjectUIHostingViewController {}
-    #endif
 #endif
 
 // swiftlint:enable cyclomatic_complexity
