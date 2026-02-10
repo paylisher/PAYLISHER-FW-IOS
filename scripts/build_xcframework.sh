@@ -31,11 +31,18 @@ log_section() {
 }
 
 usage() {
-    echo "Usage: $0 [-s SCHEME_NAME]"
+    echo "Usage: $0 [-s SCHEME_NAME] [-t TOOLCHAIN]"
     echo ""
     echo "Options:"
     echo "  -s    Scheme name (default: Paylisher)"
+    echo "  -t    Toolchain identifier (e.g., org.swift.5101202403041a for Swift 5.10)"
+    echo "        Use 'swift5' as shorthand for Swift 5.10 Release toolchain"
     echo "  -h    Show this help"
+    echo ""
+    echo "Examples:"
+    echo "  $0                          # Build with default Xcode toolchain"
+    echo "  $0 -t swift5               # Build with Swift 5.10 toolchain"
+    echo "  $0 -t org.swift.5101202403041a  # Build with specific toolchain ID"
     exit 0
 }
 
@@ -44,14 +51,51 @@ usage() {
 # ============================================================================
 
 SCHEME_NAME="Paylisher"
+TOOLCHAIN_ID=""
 
-while getopts "s:h" opt; do
+while getopts "s:t:h" opt; do
     case $opt in
         s) SCHEME_NAME="$OPTARG" ;;
+        t) TOOLCHAIN_ID="$OPTARG" ;;
         h) usage ;;
         *) usage ;;
     esac
 done
+
+# ============================================================================
+# Toolchain Resolution
+# ============================================================================
+
+TOOLCHAIN_FLAG=""
+TOOLCHAIN_DISPLAY="Default (Xcode built-in)"
+
+if [ -n "$TOOLCHAIN_ID" ]; then
+    # Shorthand aliases
+    case "$TOOLCHAIN_ID" in
+        swift5|swift5.10|swift510)
+            TOOLCHAIN_ID="org.swift.5101202403041a"
+            ;;
+    esac
+
+    # Verify toolchain exists
+    TOOLCHAIN_PATH=$(find /Library/Developer/Toolchains -name "*.xctoolchain" -maxdepth 1 2>/dev/null | while read tc; do
+        if plutil -p "$tc/Info.plist" 2>/dev/null | grep -q "$TOOLCHAIN_ID"; then
+            echo "$tc"
+            break
+        fi
+    done)
+
+    if [ -z "$TOOLCHAIN_PATH" ]; then
+        log_error "Toolchain '$TOOLCHAIN_ID' not found! Check installed toolchains in /Library/Developer/Toolchains/"
+    fi
+
+    TOOLCHAIN_DISPLAY="$TOOLCHAIN_ID"
+    TOOLCHAIN_FLAG="-toolchain $TOOLCHAIN_ID"
+
+    # Show toolchain Swift version
+    TOOLCHAIN_SWIFT_VERSION=$("$TOOLCHAIN_PATH/usr/bin/swift" --version 2>/dev/null | head -1)
+    log_info "Using toolchain: $TOOLCHAIN_SWIFT_VERSION"
+fi
 
 # ============================================================================
 # Configuration
@@ -77,6 +121,7 @@ touch "$LOG_FILE"
 log_section "Build Configuration"
 echo -e "  📁 Project Root:  $PROJECT_ROOT"
 echo -e "  🎯 Scheme:        $SCHEME_NAME"
+echo -e "  🔧 Toolchain:     $TOOLCHAIN_DISPLAY"
 echo -e "  📦 Output:        $XCFRAMEWORK_OUTPUT"
 echo -e "  📝 Log:           $LOG_FILE"
 echo ""
@@ -89,7 +134,7 @@ log_section "Cleaning Previous Builds"
 
 # Clean Xcode cache
 log_info "Cleaning Xcode build cache..."
-xcodebuild clean -project Paylisher.xcodeproj -scheme "$SCHEME_NAME" 2>&1 | tee -a "$LOG_FILE" || true
+xcodebuild clean -project Paylisher.xcodeproj -scheme "$SCHEME_NAME" $TOOLCHAIN_FLAG 2>&1 | tee -a "$LOG_FILE" || true
 
 # Backup existing XCFramework
 if [ -d "$XCFRAMEWORK_OUTPUT" ]; then
@@ -114,6 +159,7 @@ xcodebuild archive \
     -destination "generic/platform=iOS" \
     -archivePath "$IOS_ARCHIVE" \
     -sdk iphoneos \
+    $TOOLCHAIN_FLAG \
     SKIP_INSTALL=NO \
     BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
     ONLY_ACTIVE_ARCH=NO \
@@ -133,6 +179,7 @@ xcodebuild archive \
     -destination "generic/platform=iOS Simulator" \
     -archivePath "$SIMULATOR_ARCHIVE" \
     -sdk iphonesimulator \
+    $TOOLCHAIN_FLAG \
     SKIP_INSTALL=NO \
     BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
     ONLY_ACTIVE_ARCH=NO \
@@ -236,7 +283,12 @@ log_info "Cleaning up archive files..."
 rm -rf "$IOS_ARCHIVE" "$SIMULATOR_ARCHIVE"
 
 echo -e "\n${CYAN}📋 Next Steps:${NC}"
-echo "  1. Test import in Xcode 16.x project"
+echo "  1. Test import in Xcode 15.x/16.x project"
 echo "  2. Update Package.swift checksum if publishing"
 echo "  3. Create GitHub release with ${SCHEME_NAME}.xcframework.zip"
+if [ -n "$TOOLCHAIN_FLAG" ]; then
+    echo ""
+    echo -e "  ${YELLOW}ℹ️  Built with custom toolchain: $TOOLCHAIN_DISPLAY${NC}"
+    echo -e "  ${YELLOW}   This build targets backward compatibility with older Xcode versions.${NC}"
+fi
 echo ""
