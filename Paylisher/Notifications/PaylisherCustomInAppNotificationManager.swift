@@ -87,9 +87,8 @@ public class PaylisherCustomInAppNotificationManager {
         
        
         let lang = payload.defaultLang ?? "en"
-      //  let layoutType = payload.layoutType ?? "no-type"
-       // print("Default Lang:", lang)
-       // print("Layout Type:", layoutType)
+        let layoutType = payload.layoutType ?? "modal"
+        print("📐 [Paylisher] Layout Type:", layoutType)
         
         
         if let layouts = payload.layouts, !layouts.isEmpty {
@@ -110,18 +109,12 @@ public class PaylisherCustomInAppNotificationManager {
                 print("horizontalPosition: ", style.horizontalPosition ?? "boş")
                 print("active: ", close.active ?? "")
                 
-                let styleVC = StyleViewController(style: style, close: close, extra: extra, blocks: blocks, defaultLang: lang)
-//#if IOS
-//                styleVC.modalPresentationStyle = .overFullScreen
-                        
-//                if let rootVC = UIApplication.shared.windows.first?.rootViewController {
-//                    rootVC.present(styleVC, animated: false)
-//                }
-                
+                let styleVC = StyleViewController(style: style, close: close, extra: extra, blocks: blocks, defaultLang: lang, layoutType: layoutType)
+                styleVC.modalPresentationStyle = .overFullScreen
+
                 if windowScene != nil,
                    let keyWindow = windowScene?.windows.first(where: { $0.isKeyWindow }),
                    let rootVC = keyWindow.rootViewController {
-                       rootVC.modalPresentationStyle = UIModalPresentationStyle.overFullScreen
                        rootVC.present(styleVC, animated: false)
                 }
 //#endif
@@ -139,7 +132,7 @@ public class PaylisherCustomInAppNotificationManager {
                 print("position: ", close.position ?? "")
                 print("iconColor: ", close.icon?.color ?? "")
                 print("iconStyle: ", close.icon?.style ?? "")
-                print("textLabel: ", close.text?.label![lang] ?? "")
+                print("textLabel: ", close.text?.label?[lang] ?? "")
                 print("textFontSize: ", close.text?.fontSize ?? "")
                 print("textColor: ", close.text?.color ?? "")
                 

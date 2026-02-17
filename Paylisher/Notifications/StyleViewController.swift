@@ -17,14 +17,16 @@ class StyleViewController: UIViewController {
     
     private let blocks: CustomInAppPayload.Layout.Blocks
 
+    private let layoutType: String
+
     private let containerView = UIView()
-    
+
     private var containerHeightConstraint: NSLayoutConstraint?
-    
+
     private let overlayView = UIView()
-    
+
     private let arrowImageView = UIImageView()
-    
+
     private let closeButton = UIButton(type: .system)
 
     private let scrollView = UIScrollView()
@@ -38,18 +40,20 @@ class StyleViewController: UIViewController {
     }()
 
     private let defaultLang: String
-    
-    
+
+
     init(style: CustomInAppPayload.Layout.Style,
          close: CustomInAppPayload.Layout.Close,
          extra: CustomInAppPayload.Layout.Extra,
          blocks: CustomInAppPayload.Layout.Blocks,
-         defaultLang: String) {
+         defaultLang: String,
+         layoutType: String = "modal") {
         self.style = style
         self.close = close
         self.extra = extra
         self.blocks = blocks
         self.defaultLang = defaultLang
+        self.layoutType = layoutType
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -70,33 +74,28 @@ class StyleViewController: UIViewController {
 
     
     func setupUI() {
-        
+
         overlayView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(overlayView)
-        
+
         NSLayoutConstraint.activate([
             overlayView.topAnchor.constraint(equalTo: view.topAnchor),
             overlayView.leftAnchor.constraint(equalTo: view.leftAnchor),
             overlayView.rightAnchor.constraint(equalTo: view.rightAnchor),
             overlayView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
-        
+
         containerView.translatesAutoresizingMaskIntoConstraints = false
-        
         view.addSubview(containerView)
-        
-        let centerYConstraint = containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-        
-        centerYConstraint.identifier = "containerCenterY"
-        
+
         arrowImageView.translatesAutoresizingMaskIntoConstraints = false
         arrowImageView.contentMode = .scaleAspectFit
         arrowImageView.isHidden = true
-        
+
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.isHidden = true
         view.addSubview(closeButton)
-        
+
         containerView.addSubview(arrowImageView)
 
         // ScrollView + StackView for block content
@@ -106,22 +105,13 @@ class StyleViewController: UIViewController {
         containerView.addSubview(scrollView)
         scrollView.addSubview(contentStackView)
 
+        // Common constraints for arrow and close button
         NSLayoutConstraint.activate([
-            containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            centerYConstraint,
-            containerView.widthAnchor.constraint(equalToConstant: 350),
-
             arrowImageView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
             arrowImageView.leftAnchor.constraint(equalTo: containerView.leftAnchor, constant: 8),
             arrowImageView.widthAnchor.constraint(equalToConstant: 32),
             arrowImageView.heightAnchor.constraint(equalToConstant: 32),
             closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
-
-            // ScrollView fills container
-            scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
-            scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
 
             // StackView fills scrollView content
             contentStackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
@@ -131,68 +121,123 @@ class StyleViewController: UIViewController {
             contentStackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
         ])
 
-        // Dynamic height: fit content, max 75% of screen
-        let fitHeight = containerView.heightAnchor.constraint(equalTo: scrollView.contentLayoutGuide.heightAnchor, constant: 16)
-        fitHeight.priority = .defaultHigh
-        fitHeight.isActive = true
+        var centerYConstraint: NSLayoutConstraint?
 
-        let maxHeight = containerView.heightAnchor.constraint(lessThanOrEqualToConstant: UIScreen.main.bounds.height * 0.75)
-        maxHeight.isActive = true
+        switch layoutType {
+        case "fullscreen":
+            // Fullscreen: container fills the entire screen
+            NSLayoutConstraint.activate([
+                containerView.topAnchor.constraint(equalTo: view.topAnchor),
+                containerView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
-        let minHeight = containerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 80)
-        minHeight.priority = .defaultLow
-        minHeight.isActive = true
+                scrollView.topAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.topAnchor),
+                scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor),
+            ])
+
+        case "banner":
+            // Banner: full width, compact height, positioned top or bottom
+            let verticalPos = style.verticalPosition ?? "bottom"
+
+            NSLayoutConstraint.activate([
+                containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+                scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
+            ])
+
+            if verticalPos == "top" {
+                containerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor).isActive = true
+            } else {
+                containerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor).isActive = true
+            }
+
+            // Dynamic height for banner, max 40% of screen
+            let fitHeight = containerView.heightAnchor.constraint(equalTo: scrollView.contentLayoutGuide.heightAnchor, constant: 16)
+            fitHeight.priority = .defaultHigh
+            fitHeight.isActive = true
+
+            let maxHeight = containerView.heightAnchor.constraint(lessThanOrEqualToConstant: UIScreen.main.bounds.height * 0.4)
+            maxHeight.isActive = true
+
+        default:
+            // Modal (default): centered, 350px wide, dynamic height
+            let cY = containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            cY.identifier = "containerCenterY"
+            centerYConstraint = cY
+
+            NSLayoutConstraint.activate([
+                containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                cY,
+                containerView.widthAnchor.constraint(equalToConstant: 350),
+
+                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+                scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
+            ])
+
+            // Dynamic height: fit content, max 75% of screen
+            let fitHeight = containerView.heightAnchor.constraint(equalTo: scrollView.contentLayoutGuide.heightAnchor, constant: 16)
+            fitHeight.priority = .defaultHigh
+            fitHeight.isActive = true
+
+            let maxHeight = containerView.heightAnchor.constraint(lessThanOrEqualToConstant: UIScreen.main.bounds.height * 0.75)
+            maxHeight.isActive = true
+
+            let minHeight = containerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 80)
+            minHeight.priority = .defaultLow
+            minHeight.isActive = true
+        }
 
         applyStyle(centerYConstraint: centerYConstraint)
         applyClose()
         applyOverlay()
         applyBlocks()
-        
-        
     }
     
    
     
-   private func applyStyle(centerYConstraint: NSLayoutConstraint) {
-        
-        if style.navigationalArrows ?? true{
-            
+   private func applyStyle(centerYConstraint: NSLayoutConstraint?) {
+
+        if style.navigationalArrows == true {
             arrowImageView.image = UIImage(systemName: "arrow.left.square.fill")
             arrowImageView.tintColor = .blue
             arrowImageView.isHidden = false
-            
         }
-        
-       if let bgColorHex = style.bgColor {
-            
-            containerView.backgroundColor = UIColor(hex: bgColorHex)
- 
-        }
-       
-       
-        
-       let radiusValue = CGFloat(style.radius ?? 4)
 
-       containerView.layer.cornerRadius = radiusValue
-       
-       containerView.clipsToBounds = true
-        
+        if let bgColorHex = style.bgColor {
+            containerView.backgroundColor = UIColor(hex: bgColorHex)
+        }
+
+        // Fullscreen: no corner radius
+        if layoutType == "fullscreen" {
+            containerView.layer.cornerRadius = 0
+        } else {
+            let radiusValue = CGFloat(style.radius ?? 4)
+            containerView.layer.cornerRadius = radiusValue
+        }
+
+        containerView.clipsToBounds = true
+
         if let bgImageStr = style.bgImage, !bgImageStr.isEmpty {
             addBackgroundImage(urlString: bgImageStr)
         }
-        
-        if style.verticalPosition == "bottom" {
-            
-            centerYConstraint.isActive = false
-            
+
+        // Only apply verticalPosition override for modal layout (banner handles it in setupUI)
+        if layoutType == "modal", style.verticalPosition == "bottom", let cY = centerYConstraint {
+            cY.isActive = false
             containerView.bottomAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.bottomAnchor,
                 constant: -20
             ).isActive = true
         }
-        
-        
-        
     }
     
     private func applyClose() {
