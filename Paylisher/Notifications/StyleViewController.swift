@@ -142,11 +142,14 @@ class StyleViewController: UIViewController {
             // Banner: edge-to-edge, oval corners, default center position
             let verticalPos = style.verticalPosition ?? "center"
 
+            // Top pozisyonda içerik status bar/saat ile karışmasın diye safeArea padding
+            let topPadding: CGFloat = (verticalPos == "top") ? 0 : 16
+
             NSLayoutConstraint.activate([
                 containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
-                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16),
+                scrollView.topAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.topAnchor, constant: topPadding),
                 scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
                 scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16),
@@ -223,7 +226,7 @@ class StyleViewController: UIViewController {
         if layoutType == "fullscreen" {
             containerView.layer.cornerRadius = 0
         } else if layoutType == "banner" {
-            let radiusValue = CGFloat(style.radius ?? 24)
+            let radiusValue = CGFloat(style.radius ?? 32)
             containerView.layer.cornerRadius = radiusValue
             // Only round exposed corners based on position
             let verticalPos = style.verticalPosition ?? "center"
