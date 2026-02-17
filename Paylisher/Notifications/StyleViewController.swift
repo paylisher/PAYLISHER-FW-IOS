@@ -26,7 +26,17 @@ class StyleViewController: UIViewController {
     private let arrowImageView = UIImageView()
     
     private let closeButton = UIButton(type: .system)
-    
+
+    private let scrollView = UIScrollView()
+    private let contentStackView: UIStackView = {
+        let sv = UIStackView()
+        sv.axis = .vertical
+        sv.spacing = 0
+        sv.alignment = .fill
+        sv.distribution = .equalSpacing
+        return sv
+    }()
+
     private let defaultLang: String
     
     
@@ -88,26 +98,55 @@ class StyleViewController: UIViewController {
         view.addSubview(closeButton)
         
         containerView.addSubview(arrowImageView)
-        
-        
-        
-        
+
+        // ScrollView + StackView for block content
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.showsVerticalScrollIndicator = false
+        contentStackView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(scrollView)
+        scrollView.addSubview(contentStackView)
+
         NSLayoutConstraint.activate([
             containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             centerYConstraint,
             containerView.widthAnchor.constraint(equalToConstant: 350),
-            containerView.heightAnchor.constraint(equalToConstant: 250),
+
             arrowImageView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
             arrowImageView.leftAnchor.constraint(equalTo: containerView.leftAnchor, constant: 8),
             arrowImageView.widthAnchor.constraint(equalToConstant: 32),
             arrowImageView.heightAnchor.constraint(equalToConstant: 32),
             closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
-            //closeButton.rightAnchor.constraint(equalTo: containerView.rightAnchor, constant: -8)
+
+            // ScrollView fills container
+            scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+            scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
+
+            // StackView fills scrollView content
+            contentStackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            contentStackView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            contentStackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            contentStackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            contentStackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
         ])
-        
+
+        // Dynamic height: fit content, max 75% of screen
+        let fitHeight = containerView.heightAnchor.constraint(equalTo: scrollView.contentLayoutGuide.heightAnchor, constant: 16)
+        fitHeight.priority = .defaultHigh
+        fitHeight.isActive = true
+
+        let maxHeight = containerView.heightAnchor.constraint(lessThanOrEqualToConstant: UIScreen.main.bounds.height * 0.75)
+        maxHeight.isActive = true
+
+        let minHeight = containerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 80)
+        minHeight.priority = .defaultLow
+        minHeight.isActive = true
+
         applyStyle(centerYConstraint: centerYConstraint)
         applyClose()
         applyOverlay()
+        applyBlocks()
         
         
     }
@@ -374,35 +413,296 @@ class StyleViewController: UIViewController {
         }
     }
     
-   /* private func applyBlocks() {
-    
-        guard let orderArray = blocks.order else { return }
-        
-        for block in orderArray {
-            switch block {
-            case .spacer(let spacerBlock):
-                applySpacerBlock(spacerBlock)
-            default:
-                break
-            }
-        }
-    }*/
-    
-    /*private func applySpacerBlock(_ spacer: CustomInAppPayload.Layout.Blocks.SpacerBlock) {
-        let fill = spacer.fillAvailableSpacing ?? false
-        let spacing = spacer.verticalSpacing ?? 0
-        
-        if fill {
-            
-            if let ch = containerHeightConstraint {
-                ch.constant += CGFloat(spacing)
-            }
-        } else {
-            
-        }
-    }*/
+    // MARK: - Block Rendering
 
-    
+    private func applyBlocks() {
+        guard let orderArray = blocks.order else { return }
+
+        for block in orderArray {
+            var blockView: UIView?
+            switch block {
+            case .text(let tb):
+                blockView = renderTextBlock(tb)
+            case .image(let ib):
+                blockView = renderImageBlock(ib)
+            case .spacer(let sb):
+                blockView = renderSpacerBlock(sb)
+            case .button(let bb):
+                blockView = renderButtonBlock(bb)
+            case .buttonGroup(let bg):
+                blockView = renderButtonGroupBlock(bg)
+            case .unknown:
+                continue
+            }
+            if let v = blockView {
+                contentStackView.addArrangedSubview(v)
+            }
+        }
+    }
+
+    private func renderTextBlock(_ block: CustomInAppPayload.Layout.Blocks.TextBlock) -> UIView {
+        let label = UILabel()
+        label.text = block.content?[defaultLang] ?? block.content?.values.first ?? ""
+        label.numberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
+
+        let font = makeFont(family: block.fontFamily, weight: block.fontWeight, size: block.fontSize)
+        if block.italic == true {
+            label.font = UIFont.italicSystemFont(ofSize: font.pointSize)
+        } else {
+            label.font = font
+        }
+
+        if block.underscore == true {
+            let text = label.text ?? ""
+            label.attributedText = NSAttributedString(string: text, attributes: [
+                .underlineStyle: NSUnderlineStyle.single.rawValue,
+                .font: label.font as Any,
+                .foregroundColor: UIColor(hex: block.color ?? "#000000") ?? .black
+            ])
+        } else if let colorHex = block.color, let color = UIColor(hex: colorHex) {
+            label.textColor = color
+        }
+
+        switch block.textAlignment {
+        case "center": label.textAlignment = .center
+        case "right": label.textAlignment = .right
+        default: label.textAlignment = .left
+        }
+
+        let margin = CGFloat(block.horizontalMargin ?? 0)
+        if margin > 0 {
+            let wrapper = UIView()
+            label.translatesAutoresizingMaskIntoConstraints = false
+            wrapper.addSubview(label)
+            NSLayoutConstraint.activate([
+                label.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 4),
+                label.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -4),
+                label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: margin),
+                label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -margin),
+            ])
+            return wrapper
+        }
+
+        let wrapper = UIView()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        wrapper.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 4),
+            label.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -4),
+            label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16),
+            label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16),
+        ])
+
+        if let action = block.action, !action.isEmpty {
+            let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
+            wrapper.isUserInteractionEnabled = true
+            wrapper.accessibilityIdentifier = action
+            wrapper.addGestureRecognizer(tap)
+        }
+
+        return wrapper
+    }
+
+    private func renderImageBlock(_ block: CustomInAppPayload.Layout.Blocks.ImageBlock) -> UIView {
+        let imageView = UIImageView()
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
+
+        if let radius = block.radius {
+            imageView.layer.cornerRadius = CGFloat(radius)
+        }
+
+        let heightConstraint = imageView.heightAnchor.constraint(equalToConstant: 150)
+        heightConstraint.priority = .defaultHigh
+        heightConstraint.isActive = true
+
+        if let urlString = block.url, let url = URL(string: urlString) {
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                if let data = data, let image = UIImage(data: data) {
+                    DispatchQueue.main.async {
+                        imageView.image = image
+                    }
+                }
+            }.resume()
+        }
+
+        let margin = CGFloat(block.margin ?? 0)
+        let wrapper = UIView()
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        wrapper.addSubview(imageView)
+        NSLayoutConstraint.activate([
+            imageView.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: margin),
+            imageView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -margin),
+            imageView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: margin),
+            imageView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -margin),
+        ])
+
+        if let link = block.link, !link.isEmpty {
+            let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
+            wrapper.isUserInteractionEnabled = true
+            wrapper.accessibilityIdentifier = link
+            wrapper.addGestureRecognizer(tap)
+        }
+
+        return wrapper
+    }
+
+    private func renderSpacerBlock(_ block: CustomInAppPayload.Layout.Blocks.SpacerBlock) -> UIView {
+        let spacer = UIView()
+        let height = CGFloat(block.verticalSpacing ?? 8)
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        spacer.heightAnchor.constraint(equalToConstant: height).isActive = true
+        return spacer
+    }
+
+    private func renderButtonBlock(_ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock.ButtonBlock) -> UIView {
+        let button = createStyledButton(block)
+        let margin = CGFloat(block.margin ?? 8)
+
+        let wrapper = UIView()
+        button.translatesAutoresizingMaskIntoConstraints = false
+        wrapper.addSubview(button)
+
+        let heightValue: CGFloat
+        switch block.verticalSize {
+        case "small": heightValue = 32
+        case "large": heightValue = 56
+        default: heightValue = 44
+        }
+
+        var constraints = [
+            button.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: margin),
+            button.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -margin),
+            button.heightAnchor.constraint(equalToConstant: heightValue),
+        ]
+
+        switch block.horizontalSize {
+        case "half":
+            constraints.append(button.widthAnchor.constraint(equalTo: wrapper.widthAnchor, multiplier: 0.5))
+        case "auto":
+            constraints.append(button.leadingAnchor.constraint(greaterThanOrEqualTo: wrapper.leadingAnchor, constant: 16))
+            constraints.append(button.trailingAnchor.constraint(lessThanOrEqualTo: wrapper.trailingAnchor, constant: -16))
+        default: // "full"
+            constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
+            constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
+        }
+
+        switch block.buttonPosition {
+        case "left":
+            constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
+        case "right":
+            constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
+        default:
+            constraints.append(button.centerXAnchor.constraint(equalTo: wrapper.centerXAnchor))
+        }
+
+        NSLayoutConstraint.activate(constraints)
+        return wrapper
+    }
+
+    private func renderButtonGroupBlock(_ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock) -> UIView {
+        guard let buttons = block.buttons, !buttons.isEmpty else { return UIView() }
+
+        let isHorizontal = block.buttonGroupType == "double-horizontal"
+        let stack = UIStackView()
+        stack.axis = isHorizontal ? .horizontal : .vertical
+        stack.spacing = 8
+        stack.alignment = .fill
+        stack.distribution = isHorizontal ? .fillEqually : .fill
+
+        for btnData in buttons {
+            let btn = createStyledButton(btnData)
+            let heightValue: CGFloat
+            switch btnData.verticalSize {
+            case "small": heightValue = 32
+            case "large": heightValue = 56
+            default: heightValue = 44
+            }
+            btn.heightAnchor.constraint(equalToConstant: heightValue).isActive = true
+            stack.addArrangedSubview(btn)
+        }
+
+        let wrapper = UIView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        wrapper.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 8),
+            stack.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -8),
+            stack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16),
+        ])
+        return wrapper
+    }
+
+    private func createStyledButton(_ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock.ButtonBlock) -> UIButton {
+        let button = UIButton(type: .system)
+        let title = block.label?[defaultLang] ?? block.label?.values.first ?? ""
+        button.setTitle(title, for: .normal)
+
+        let font = makeFont(family: block.fontFamily, weight: block.fontWeight, size: block.fontSize)
+        button.titleLabel?.font = font
+
+        if let hex = block.textColor, let color = UIColor(hex: hex) {
+            button.setTitleColor(color, for: .normal)
+        } else {
+            button.setTitleColor(.white, for: .normal)
+        }
+
+        if let hex = block.backgroundColor, let color = UIColor(hex: hex) {
+            button.backgroundColor = color
+        }
+
+        if let hex = block.borderColor, let color = UIColor(hex: hex) {
+            button.layer.borderColor = color.cgColor
+            button.layer.borderWidth = 1
+        }
+
+        button.layer.cornerRadius = CGFloat(block.borderRadius ?? 8)
+        button.clipsToBounds = true
+
+        let action = block.action ?? ""
+        button.accessibilityIdentifier = action
+        button.addTarget(self, action: #selector(handleButtonTap(_:)), for: .touchUpInside)
+
+        return button
+    }
+
+    private func makeFont(family: String?, weight: String?, size: String?) -> UIFont {
+        let fontSize = CGFloat(Double(size ?? "16") ?? 16)
+        let fontWeight: UIFont.Weight = weight == "bold" ? .bold : .regular
+
+        switch family {
+        case "monospace":
+            return .monospacedSystemFont(ofSize: fontSize, weight: fontWeight)
+        default:
+            return .systemFont(ofSize: fontSize, weight: fontWeight)
+        }
+    }
+
+    @objc private func handleButtonTap(_ sender: UIButton) {
+        let action = sender.accessibilityIdentifier ?? ""
+        handleBlockAction(action)
+    }
+
+    @objc private func handleTapAction(_ gesture: UITapGestureRecognizer) {
+        let action = gesture.view?.accessibilityIdentifier ?? ""
+        handleBlockAction(action)
+    }
+
+    private func handleBlockAction(_ action: String) {
+        if action.isEmpty || action == "close" {
+            didTapClose()
+            return
+        }
+
+        if let url = URL(string: action) {
+            UIApplication.shared.open(url)
+        }
+        didTapClose()
+    }
+
     @objc private func didTapClose() {
         guard let transitionType = extra.transition else {
             dismiss(animated: true)
