@@ -132,10 +132,8 @@ class StyleViewController: UIViewController {
        
        
         
-       let radius = style.radius
-       
-       let radiusValue = CGFloat(radius!)
-       
+       let radiusValue = CGFloat(style.radius ?? 4)
+
        containerView.layer.cornerRadius = radiusValue
        
        containerView.clipsToBounds = true
@@ -254,7 +252,7 @@ class StyleViewController: UIViewController {
         
         let lang = defaultLang
         
-        var title = close.text?.label![lang]
+        var title = close.text?.label?[lang]
                if let dict = textData?.label {
                    title = dict[lang] ?? dict["en"] ?? "Close"
                }
@@ -331,11 +329,10 @@ class StyleViewController: UIViewController {
             overlayView.addGestureRecognizer(tapGesture)
         }
         
-        let overlayColorHex = (extra.overlay?.color)!
-            
-        let color = UIColor(hex: overlayColorHex)
-            
-        overlayView.backgroundColor = color?.withAlphaComponent(0.5)
+        if let overlayColorHex = extra.overlay?.color,
+           let color = UIColor(hex: overlayColorHex) {
+            overlayView.backgroundColor = color.withAlphaComponent(0.5)
+        }
         
          
      }

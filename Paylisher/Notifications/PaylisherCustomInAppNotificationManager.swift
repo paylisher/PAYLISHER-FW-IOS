@@ -194,7 +194,7 @@ public class PaylisherCustomInAppNotificationManager {
                             print("--------------Text Block---------------")
                             print("typeText: ", textBlock.type ?? "")
                             print("orderText: ", textBlock.order ?? "")
-                            print("contentText: ", textBlock.content![lang]!)
+                            print("contentText: ", textBlock.content?[lang] ?? textBlock.content?.values.first ?? "")
                             print("actionText: ", textBlock.action ?? "")
                             print("fontFamilyText: ", textBlock.fontFamily ?? "")
                             print("fontWeightText: ", textBlock.fontWeight ?? "")
@@ -217,7 +217,7 @@ public class PaylisherCustomInAppNotificationManager {
 
                                 for button in buttonsArray {
 
-                                    print("labelButtonGroup: ", button.label![lang]!)
+                                    print("labelButtonGroup: ", button.label?[lang] ?? button.label?.values.first ?? "")
                                     print("actionButtonGroup: ", button.action ?? "")
                                     print("fontFamilyButtonGroup: ", button.fontFamily ?? "")
                                     print("fontWeightButtonGroup: ", button.fontWeight ?? "")
