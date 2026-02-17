@@ -212,11 +212,11 @@ public class PaylisherCustomInAppNotificationManager {
                             print("typeButtonGroup: ", buttonGroupBlock.type ?? "")
                             print("orderButtonGroup: ", buttonGroupBlock.order ?? "")
                             print("buttonGroupTypeButtonGroup: ", buttonGroupBlock.buttonGroupType ?? "")
-                            
+
                             if let buttonsArray = buttonGroupBlock.buttons{
-                                
+
                                 for button in buttonsArray {
-                                    
+
                                     print("labelButtonGroup: ", button.label![lang]!)
                                     print("actionButtonGroup: ", button.action ?? "")
                                     print("fontFamilyButtonGroup: ", button.fontFamily ?? "")
@@ -235,6 +235,31 @@ public class PaylisherCustomInAppNotificationManager {
                                     print("----------------------------------")
                                 }
                             }
+
+                        case .button(let buttonBlock):
+                            print("----------------------------------")
+                            print("--------------Button Block---------------")
+                            print("labelButton: ", buttonBlock.label?[lang] ?? "")
+                            print("actionButton: ", buttonBlock.action ?? "")
+                            print("fontFamilyButton: ", buttonBlock.fontFamily ?? "")
+                            print("fontWeightButton: ", buttonBlock.fontWeight ?? "")
+                            print("fontSizeButton: ", buttonBlock.fontSize ?? "")
+                            print("underscoreButton: ", buttonBlock.underscore ?? "")
+                            print("italicButton: ", buttonBlock.italic ?? "")
+                            print("textColorButton: ", buttonBlock.textColor ?? "")
+                            print("backgroundColorButton: ", buttonBlock.backgroundColor ?? "")
+                            print("borderColorButton: ", buttonBlock.borderColor ?? "")
+                            print("borderRadiusButton: ", buttonBlock.borderRadius ?? "")
+                            print("horizontalSizeButton: ", buttonBlock.horizontalSize ?? "")
+                            print("verticalSizeButton: ", buttonBlock.verticalSize ?? "")
+                            print("buttonPositionButton: ", buttonBlock.buttonPosition ?? "")
+                            print("marginButton: ", buttonBlock.margin ?? "")
+                            print("----------------------------------")
+
+                        case .unknown(let typeName):
+                            print("----------------------------------")
+                            print("⚠️ Unknown block type: \(typeName) - skipped")
+                            print("----------------------------------")
                         }
                     }
                 }
