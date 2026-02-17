@@ -139,27 +139,28 @@ class StyleViewController: UIViewController {
             ])
 
         case "banner":
-            // Banner: full width, compact height, positioned top or bottom
+            // Banner: card-style with margin from edges, rounded corners, positioned top or bottom
             let verticalPos = style.verticalPosition ?? "bottom"
+            let bannerMargin: CGFloat = 12
 
             NSLayoutConstraint.activate([
-                containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: bannerMargin),
+                containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -bannerMargin),
 
-                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 12),
                 scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
+                scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -12),
             ])
 
             if verticalPos == "top" {
-                containerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor).isActive = true
+                containerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: bannerMargin).isActive = true
             } else {
-                containerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor).isActive = true
+                containerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -bannerMargin).isActive = true
             }
 
             // Dynamic height for banner, max 40% of screen
-            let fitHeight = containerView.heightAnchor.constraint(equalTo: scrollView.contentLayoutGuide.heightAnchor, constant: 16)
+            let fitHeight = containerView.heightAnchor.constraint(equalTo: scrollView.contentLayoutGuide.heightAnchor, constant: 24)
             fitHeight.priority = .defaultHigh
             fitHeight.isActive = true
 
@@ -216,15 +217,26 @@ class StyleViewController: UIViewController {
             containerView.backgroundColor = UIColor(hex: bgColorHex)
         }
 
-        // Fullscreen: no corner radius
+        // Corner radius based on layout type
         if layoutType == "fullscreen" {
             containerView.layer.cornerRadius = 0
+        } else if layoutType == "banner" {
+            let radiusValue = CGFloat(style.radius ?? 16)
+            containerView.layer.cornerRadius = radiusValue
+            // Shadow for floating card effect
+            containerView.layer.shadowColor = UIColor.black.cgColor
+            containerView.layer.shadowOpacity = 0.15
+            containerView.layer.shadowOffset = CGSize(width: 0, height: 2)
+            containerView.layer.shadowRadius = 8
+            containerView.layer.masksToBounds = false
         } else {
             let radiusValue = CGFloat(style.radius ?? 4)
             containerView.layer.cornerRadius = radiusValue
         }
 
-        containerView.clipsToBounds = true
+        if layoutType != "banner" {
+            containerView.clipsToBounds = true
+        }
 
         if let bgImageStr = style.bgImage, !bgImageStr.isEmpty {
             addBackgroundImage(urlString: bgImageStr)
