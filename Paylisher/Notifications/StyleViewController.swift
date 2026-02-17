@@ -623,24 +623,31 @@ class StyleViewController: UIViewController {
             button.heightAnchor.constraint(equalToConstant: heightValue),
         ]
 
-        switch block.horizontalSize {
-        case "half":
-            constraints.append(button.widthAnchor.constraint(equalTo: wrapper.widthAnchor, multiplier: 0.5))
-        case "auto":
-            constraints.append(button.leadingAnchor.constraint(greaterThanOrEqualTo: wrapper.leadingAnchor, constant: 16))
-            constraints.append(button.trailingAnchor.constraint(lessThanOrEqualTo: wrapper.trailingAnchor, constant: -16))
-        default: // "full"
-            constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
-            constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
-        }
+        let hSize = (block.horizontalSize ?? "").isEmpty ? "auto" : block.horizontalSize!
 
-        switch block.buttonPosition {
-        case "left":
+        if hSize == "full" {
+            // Full width - buttonPosition is irrelevant
             constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
-        case "right":
             constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
-        default:
-            constraints.append(button.centerXAnchor.constraint(equalTo: wrapper.centerXAnchor))
+        } else {
+            // half or auto: apply width then position
+            if hSize == "half" {
+                constraints.append(button.widthAnchor.constraint(equalTo: wrapper.widthAnchor, multiplier: 0.5))
+            } else {
+                // auto: content-hugging size with min padding
+                constraints.append(button.leadingAnchor.constraint(greaterThanOrEqualTo: wrapper.leadingAnchor, constant: 16))
+                constraints.append(button.trailingAnchor.constraint(lessThanOrEqualTo: wrapper.trailingAnchor, constant: -16))
+                button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 24, bottom: 8, right: 24)
+            }
+
+            switch block.buttonPosition {
+            case "left":
+                constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
+            case "right":
+                constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
+            default:
+                constraints.append(button.centerXAnchor.constraint(equalTo: wrapper.centerXAnchor))
+            }
         }
 
         NSLayoutConstraint.activate(constraints)
