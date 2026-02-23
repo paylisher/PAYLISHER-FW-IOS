@@ -95,12 +95,12 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             pagesStack.heightAnchor.constraint(equalTo: pageScrollView.frameLayoutGuide.heightAnchor),
         ])
 
-        // Build each page
+        // Build each page — add to hierarchy FIRST, then activate the width constraint
         for layout in layouts {
             let page = buildPageView(layout)
             page.translatesAutoresizingMaskIntoConstraints = false
-            page.widthAnchor.constraint(equalTo: pageScrollView.frameLayoutGuide.widthAnchor).isActive = true
             pagesStack.addArrangedSubview(page)
+            page.widthAnchor.constraint(equalTo: pageScrollView.frameLayoutGuide.widthAnchor).isActive = true
         }
 
         // Close button (subview of view — can float outside containerView for outside-* positions)
