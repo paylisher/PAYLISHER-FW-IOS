@@ -155,12 +155,19 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 bottomBar.heightAnchor.constraint(equalToConstant: 48),
             ])
         } else {
-            // Modal carousel: centered, 350pt wide, 50% of screen height
+            // Modal carousel: centered, 350pt wide, height derived from first layout's blocks
+            let contentH    = estimatedFirstPageHeight(for: 350)
+            let bottomBarH: CGFloat = 48
+            let topPad: CGFloat     = 8
+            let naturalH    = contentH + bottomBarH + topPad
+            let maxH        = UIScreen.main.bounds.height * 0.75
+            let containerH  = min(naturalH, maxH)
+
             NSLayoutConstraint.activate([
                 containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
                 containerView.widthAnchor.constraint(equalToConstant: 350),
-                containerView.heightAnchor.constraint(equalToConstant: UIScreen.main.bounds.height * 0.50),
+                containerView.heightAnchor.constraint(equalToConstant: containerH),
 
                 pageScrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
                 pageScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
@@ -289,6 +296,55 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 UITapGestureRecognizer(target: self, action: #selector(didTapClose))
             )
         }
+    }
+
+    // MARK: - Dynamic height estimation
+
+    /// Computes the approximate pixel height of the first layout's block stack
+    /// for a given container width. Used to size the modal height dynamically.
+    private func estimatedFirstPageHeight(for width: CGFloat) -> CGFloat {
+        guard let layout = layouts.first, let blocks = layout.blocks?.order else { return 350 }
+
+        var height: CGFloat = 8 // top padding
+        for block in blocks {
+            switch block {
+            case .image(let ib):
+                let margin = CGFloat(ib.margin ?? 0) * 2
+                height += 150 + margin
+
+            case .text(let tb):
+                let text  = tb.content?[defaultLang] ?? tb.content?.values.first ?? ""
+                let size  = CGFloat(Double(tb.fontSize ?? "14") ?? 14)
+                let hm    = CGFloat(tb.horizontalMargin ?? 0)
+                let tw    = width - (hm > 0 ? hm * 2 : 32)
+                let rect  = (text as NSString).boundingRect(
+                    with: CGSize(width: tw, height: .greatestFiniteMagnitude),
+                    options: .usesLineFragmentOrigin,
+                    attributes: [.font: UIFont.systemFont(ofSize: size)],
+                    context: nil
+                )
+                height += ceil(rect.height) + 8
+
+            case .spacer(let sb):
+                height += CGFloat(sb.verticalSpacing ?? 8)
+
+            case .button(let bb):
+                let m: CGFloat = CGFloat(bb.margin ?? 8)
+                let h: CGFloat = bb.verticalSize == "small" ? 32 : bb.verticalSize == "large" ? 56 : 44
+                height += h + m * 2
+
+            case .buttonGroup(let bg):
+                let isH   = bg.buttonGroupType == "double-horizontal"
+                let count = CGFloat(bg.buttons?.count ?? 1)
+                let rows: CGFloat = isH ? 1 : count
+                height += rows * 44 + 16
+
+            case .unknown:
+                break
+            }
+        }
+        height += 8 // bottom padding
+        return height
     }
 
     // MARK: - Page building
