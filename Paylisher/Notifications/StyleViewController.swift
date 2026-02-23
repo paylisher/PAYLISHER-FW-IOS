@@ -144,17 +144,12 @@ class StyleViewController: UIViewController {
             ])
 
         case "banner":
-            // Banner: edge-to-edge, oval corners, default center position
+            // Banner: edge-to-edge, fixed 26% height, position-aware corner masking
             let verticalPos = style.verticalPosition ?? "center"
-
-            // Top pozisyonda içerik status bar/saat ile karışmasın diye safeArea padding
-            let topPadding: CGFloat = (verticalPos == "top") ? 0 : 16
 
             NSLayoutConstraint.activate([
                 containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-
-                scrollView.topAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.topAnchor, constant: topPadding),
                 scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
                 scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16),
@@ -162,20 +157,19 @@ class StyleViewController: UIViewController {
 
             switch verticalPos {
             case "top":
+                // Flush with top edge; content starts below status bar
                 containerView.topAnchor.constraint(equalTo: view.topAnchor).isActive = true
+                scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor).isActive = true
             case "bottom":
                 containerView.bottomAnchor.constraint(equalTo: view.bottomAnchor).isActive = true
+                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16).isActive = true
             default: // center
                 containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16).isActive = true
             }
 
-            // Dynamic height for banner, max 40% of screen
-            let fitHeight = containerView.heightAnchor.constraint(equalTo: scrollView.contentLayoutGuide.heightAnchor, constant: 32)
-            fitHeight.priority = .defaultHigh
-            fitHeight.isActive = true
-
-            let maxHeight = containerView.heightAnchor.constraint(lessThanOrEqualToConstant: UIScreen.main.bounds.height * 0.4)
-            maxHeight.isActive = true
+            // Fixed height: 26% of screen height
+            containerView.heightAnchor.constraint(equalToConstant: UIScreen.main.bounds.height * 0.26).isActive = true
 
         default:
             // Modal (default): centered, 350px wide, dynamic height
@@ -231,20 +225,22 @@ class StyleViewController: UIViewController {
         if layoutType == "fullscreen" {
             containerView.layer.cornerRadius = 0
         } else if layoutType == "banner" {
-            let radiusValue = CGFloat(style.radius ?? 32)
+            let radiusValue = CGFloat(style.radius ?? 35)
             containerView.layer.cornerRadius = radiusValue
             // Only round exposed corners based on position
             let verticalPos = style.verticalPosition ?? "center"
             switch verticalPos {
             case "top":
+                // Flush with top edge — only bottom corners are rounded
                 containerView.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
             case "bottom":
+                // Container flush with bottom edge — only top corners rounded
                 containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
             default: // center: all corners rounded
                 break
             }
         } else {
-            let radiusValue = CGFloat(style.radius ?? 4)
+            let radiusValue = CGFloat(style.radius ?? 8)
             containerView.layer.cornerRadius = radiusValue
         }
 
@@ -265,21 +261,26 @@ class StyleViewController: UIViewController {
     }
     
     private func applyClose() {
-        
+
+        // Banners dismiss via overlay tap or auto-timeout — no close button needed
+        if layoutType == "banner" {
+            closeButton.isHidden = true
+            return
+        }
+
         if close.active ?? true {
-            
+
             closeButton.isHidden = false
         } else {
-            
+
             closeButton.isHidden = true
         }
         
         let position = close.position ?? "right"
 
-        // For fullscreen and top-banner, use safeAreaLayoutGuide so the button
-        // is not hidden behind the Dynamic Island / status bar.
-        let needsSafeTop = layoutType == "fullscreen" ||
-            (layoutType == "banner" && (style.verticalPosition ?? "center") == "top")
+        // For fullscreen, use safeAreaLayoutGuide so the button clears the Dynamic Island.
+        // Banner "top" no longer needs this — its containerView already starts at safeAreaLayoutGuide.
+        let needsSafeTop = layoutType == "fullscreen"
         let safeTopAnchor: NSLayoutYAxisAnchor = needsSafeTop
             ? view.safeAreaLayoutGuide.topAnchor
             : containerView.topAnchor
@@ -586,7 +587,8 @@ class StyleViewController: UIViewController {
             imageView.layer.cornerRadius = CGFloat(radius)
         }
 
-        let heightConstraint = imageView.heightAnchor.constraint(equalToConstant: 150)
+        let imageHeight: CGFloat = layoutType == "banner" ? 60 : 150
+        let heightConstraint = imageView.heightAnchor.constraint(equalToConstant: imageHeight)
         heightConstraint.priority = .defaultHigh
         heightConstraint.isActive = true
 

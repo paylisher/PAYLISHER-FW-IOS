@@ -199,7 +199,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         if isFullscreen {
             containerView.layer.cornerRadius = 0
         } else {
-            containerView.layer.cornerRadius = CGFloat(style.radius ?? 16)
+            containerView.layer.cornerRadius = CGFloat(style.radius ?? 8)
         }
         containerView.clipsToBounds = true
 
@@ -353,6 +353,10 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         let scrollView = UIScrollView()
         scrollView.showsVerticalScrollIndicator   = false
         scrollView.showsHorizontalScrollIndicator = false
+        // Apply per-slide background color
+        if let hex = layout.style?.bgColor, let color = UIColor(hex: hex) {
+            scrollView.backgroundColor = color
+        }
 
         let stack = UIStackView()
         stack.axis         = .vertical
@@ -407,6 +411,14 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         pageScrollView.setContentOffset(offset, animated: animated)
         pageControl.currentPage = currentIndex
         updateArrows()
+        applySlideBackground(for: currentIndex)
+    }
+
+    private func applySlideBackground(for index: Int) {
+        guard index < layouts.count,
+              let hex = layouts[index].style?.bgColor,
+              let color = UIColor(hex: hex) else { return }
+        containerView.backgroundColor = color
     }
 
     private func updateArrows() {
@@ -420,6 +432,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         currentIndex = Int(round(scrollView.contentOffset.x / scrollView.bounds.width))
         pageControl.currentPage = currentIndex
         updateArrows()
+        applySlideBackground(for: currentIndex)
     }
 
     @objc private func didTapClose() {
