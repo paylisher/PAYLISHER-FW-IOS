@@ -276,43 +276,45 @@ class StyleViewController: UIViewController {
         
         let position = close.position ?? "right"
 
+        // For fullscreen and top-banner, use safeAreaLayoutGuide so the button
+        // is not hidden behind the Dynamic Island / status bar.
+        let needsSafeTop = layoutType == "fullscreen" ||
+            (layoutType == "banner" && (style.verticalPosition ?? "center") == "top")
+        let safeTopAnchor: NSLayoutYAxisAnchor = needsSafeTop
+            ? view.safeAreaLayoutGuide.topAnchor
+            : containerView.topAnchor
+
         switch position {
-                
-            case "left":
-                
-                NSLayoutConstraint.activate([
-                            closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
-                            closeButton.leftAnchor.constraint(equalTo: containerView.leftAnchor, constant: 8)
-                        ])
-            case "right":
-                
-                NSLayoutConstraint.activate([
-                           closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
-                           closeButton.rightAnchor.constraint(equalTo: containerView.rightAnchor, constant: -8)
-                       ])
-                
-            case "outside-left":
-                
-                NSLayoutConstraint.activate([
-                           closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: -28),
-                           // containerView’dan soldan -8 px (ya da -16) offset
-                           closeButton.rightAnchor.constraint(equalTo: containerView.leftAnchor, constant: 12)
-                       ])
-                
-            case "outside-right":
 
-                NSLayoutConstraint.activate([
-                         closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: -28),
-                         closeButton.leftAnchor.constraint(equalTo: containerView.rightAnchor, constant: -12)
-                     ])
+        case "left":
+            NSLayoutConstraint.activate([
+                closeButton.topAnchor.constraint(equalTo: safeTopAnchor, constant: 8),
+                closeButton.leftAnchor.constraint(equalTo: containerView.leftAnchor, constant: 8),
+            ])
 
-                 default:
-                     // Default: top-right inside container
-                     NSLayoutConstraint.activate([
-                         closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
-                         closeButton.rightAnchor.constraint(equalTo: containerView.rightAnchor, constant: -8)
-                     ])
+        case "right":
+            NSLayoutConstraint.activate([
+                closeButton.topAnchor.constraint(equalTo: safeTopAnchor, constant: 8),
+                closeButton.rightAnchor.constraint(equalTo: containerView.rightAnchor, constant: -8),
+            ])
 
+        case "outside-left":
+            NSLayoutConstraint.activate([
+                closeButton.topAnchor.constraint(equalTo: needsSafeTop ? view.safeAreaLayoutGuide.topAnchor : containerView.topAnchor, constant: needsSafeTop ? 8 : -28),
+                closeButton.rightAnchor.constraint(equalTo: containerView.leftAnchor, constant: 12),
+            ])
+
+        case "outside-right":
+            NSLayoutConstraint.activate([
+                closeButton.topAnchor.constraint(equalTo: needsSafeTop ? view.safeAreaLayoutGuide.topAnchor : containerView.topAnchor, constant: needsSafeTop ? 8 : -28),
+                closeButton.leftAnchor.constraint(equalTo: containerView.rightAnchor, constant: -12),
+            ])
+
+        default:
+            NSLayoutConstraint.activate([
+                closeButton.topAnchor.constraint(equalTo: safeTopAnchor, constant: 8),
+                closeButton.rightAnchor.constraint(equalTo: containerView.rightAnchor, constant: -8),
+            ])
         }
 
         if let type = close.type {
