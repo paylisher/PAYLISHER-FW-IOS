@@ -63,13 +63,6 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         containerView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(containerView)
 
-        // Page control dots
-        pageControl.numberOfPages = layouts.count
-        pageControl.currentPage   = 0
-        pageControl.isHidden      = layouts.count <= 1
-        pageControl.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(pageControl)
-
         // Horizontal paging scroll view
         pageScrollView.isPagingEnabled                = true
         pageScrollView.showsHorizontalScrollIndicator = false
@@ -103,35 +96,46 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             page.widthAnchor.constraint(equalTo: pageScrollView.frameLayoutGuide.widthAnchor).isActive = true
         }
 
-        // Close button (subview of view — can float outside containerView for outside-* positions)
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.isHidden = true
-        view.addSubview(closeButton)
+        // Bottom navigation bar: [< prev]  [● ○ ○]  [next >]
+        // Arrows and page dots live here — completely separate from content.
+        let bottomBar = UIView()
+        bottomBar.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(bottomBar)
 
-        // Prev / Next arrows
         prevArrow.translatesAutoresizingMaskIntoConstraints = false
         nextArrow.translatesAutoresizingMaskIntoConstraints = false
         prevArrow.setImage(UIImage(systemName: "chevron.left.circle.fill"), for: .normal)
         nextArrow.setImage(UIImage(systemName: "chevron.right.circle.fill"), for: .normal)
         prevArrow.tintColor = UIColor.systemGray
         nextArrow.tintColor = UIColor.systemGray
-        view.addSubview(prevArrow)
-        view.addSubview(nextArrow)
+        bottomBar.addSubview(prevArrow)
+        bottomBar.addSubview(nextArrow)
 
-        // Container positioning
-        // Arrows are always inside the container (centered vertically, at left/right edges).
-        // This avoids overflow on narrow modal layouts and works for fullscreen too.
-        let arrowConstraints: [NSLayoutConstraint] = [
-            prevArrow.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            prevArrow.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
-            prevArrow.widthAnchor.constraint(equalToConstant: 36),
-            prevArrow.heightAnchor.constraint(equalToConstant: 36),
+        pageControl.numberOfPages = layouts.count
+        pageControl.currentPage   = 0
+        pageControl.isHidden      = layouts.count <= 1
+        pageControl.translatesAutoresizingMaskIntoConstraints = false
+        bottomBar.addSubview(pageControl)
 
-            nextArrow.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-            nextArrow.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
-            nextArrow.widthAnchor.constraint(equalToConstant: 36),
-            nextArrow.heightAnchor.constraint(equalToConstant: 36),
-        ]
+        NSLayoutConstraint.activate([
+            prevArrow.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 16),
+            prevArrow.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
+            prevArrow.widthAnchor.constraint(equalToConstant: 32),
+            prevArrow.heightAnchor.constraint(equalToConstant: 32),
+
+            nextArrow.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -16),
+            nextArrow.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
+            nextArrow.widthAnchor.constraint(equalToConstant: 32),
+            nextArrow.heightAnchor.constraint(equalToConstant: 32),
+
+            pageControl.centerXAnchor.constraint(equalTo: bottomBar.centerXAnchor),
+            pageControl.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
+        ])
+
+        // Close button (subview of view — can float outside containerView for outside-* positions)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.isHidden = true
+        view.addSubview(closeButton)
 
         if isFullscreen {
             NSLayoutConstraint.activate([
@@ -143,32 +147,32 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 pageScrollView.topAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.topAnchor),
                 pageScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 pageScrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                pageScrollView.bottomAnchor.constraint(equalTo: pageControl.topAnchor, constant: -4),
+                pageScrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
 
-                pageControl.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor, constant: -8),
-                pageControl.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
-                pageControl.heightAnchor.constraint(equalToConstant: 24),
+                bottomBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                bottomBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                bottomBar.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor),
+                bottomBar.heightAnchor.constraint(equalToConstant: 48),
             ])
         } else {
-            // Modal carousel: centered, 350pt wide, 65% of screen height
+            // Modal carousel: centered, 350pt wide, 50% of screen height
             NSLayoutConstraint.activate([
                 containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
                 containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
                 containerView.widthAnchor.constraint(equalToConstant: 350),
-                containerView.heightAnchor.constraint(equalToConstant: UIScreen.main.bounds.height * 0.65),
+                containerView.heightAnchor.constraint(equalToConstant: UIScreen.main.bounds.height * 0.50),
 
                 pageScrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
                 pageScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 pageScrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                pageScrollView.bottomAnchor.constraint(equalTo: pageControl.topAnchor, constant: -4),
+                pageScrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
 
-                pageControl.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
-                pageControl.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
-                pageControl.heightAnchor.constraint(equalToConstant: 24),
+                bottomBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                bottomBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+                bottomBar.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+                bottomBar.heightAnchor.constraint(equalToConstant: 48),
             ])
         }
-
-        NSLayoutConstraint.activate(arrowConstraints)
 
         applyStyleFromFirstLayout()
         applyCloseFromFirstLayout()
