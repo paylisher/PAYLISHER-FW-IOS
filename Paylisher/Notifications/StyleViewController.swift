@@ -70,6 +70,12 @@ class StyleViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         applyTransition()
+
+        if layoutType == "banner", let duration = extra.banner?.duration, duration > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(duration)) { [weak self] in
+                self?.didTapClose()
+            }
+        }
     }
 
     
@@ -105,13 +111,12 @@ class StyleViewController: UIViewController {
         containerView.addSubview(scrollView)
         scrollView.addSubview(contentStackView)
 
-        // Common constraints for arrow and close button
+        // Common constraints for arrow
         NSLayoutConstraint.activate([
             arrowImageView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
             arrowImageView.leftAnchor.constraint(equalTo: containerView.leftAnchor, constant: 8),
             arrowImageView.widthAnchor.constraint(equalToConstant: 32),
             arrowImageView.heightAnchor.constraint(equalToConstant: 32),
-            closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
 
             // StackView fills scrollView content
             contentStackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
@@ -269,9 +274,9 @@ class StyleViewController: UIViewController {
             closeButton.isHidden = true
         }
         
-        if let position = close.position {
-            
-            switch position {
+        let position = close.position ?? "right"
+
+        switch position {
                 
             case "left":
                 
@@ -295,20 +300,21 @@ class StyleViewController: UIViewController {
                        ])
                 
             case "outside-right":
-                
+
                 NSLayoutConstraint.activate([
                          closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: -28),
-                         // containerView’dan sağdan +8 px offset
                          closeButton.leftAnchor.constraint(equalTo: containerView.rightAnchor, constant: -12)
                      ])
-                     
+
                  default:
-                     break
-                
-            }
-            
-               }
-        
+                     // Default: top-right inside container
+                     NSLayoutConstraint.activate([
+                         closeButton.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+                         closeButton.rightAnchor.constraint(equalTo: containerView.rightAnchor, constant: -8)
+                     ])
+
+        }
+
         if let type = close.type {
                    switch type {
                    case "icon":
