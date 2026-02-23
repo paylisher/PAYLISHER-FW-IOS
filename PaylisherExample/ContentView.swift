@@ -8,6 +8,7 @@
 import AuthenticationServices
 import Paylisher
 import SwiftUI
+import UIKit
 import Combine
 
 class SignInViewModel: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
@@ -382,6 +383,42 @@ struct ContentView: View {
                     }
                 }
 
+                // MARK: - InApp Message Demo
+                Section("InApp Message Demo") {
+                    HStack(spacing: 8) {
+                        Button("Modal") {
+                            PaylisherCustomInAppNotificationManager.shared.customInAppFunction(
+                                userInfo: inAppMockModal(), windowScene: activeWindowScene())
+                        }
+                        .buttonStyle(.bordered).tint(.blue)
+
+                        Button("Banner") {
+                            PaylisherCustomInAppNotificationManager.shared.customInAppFunction(
+                                userInfo: inAppMockBanner(), windowScene: activeWindowScene())
+                        }
+                        .buttonStyle(.bordered).tint(.orange)
+
+                        Button("Native") {
+                            PaylisherNativeInAppNotificationManager.shared.nativeInAppNotification(
+                                userInfo: inAppMockNative(), windowScene: activeWindowScene())
+                        }
+                        .buttonStyle(.bordered).tint(.green)
+                    }
+                    HStack(spacing: 8) {
+                        Button("Fullscreen") {
+                            PaylisherCustomInAppNotificationManager.shared.customInAppFunction(
+                                userInfo: inAppMockFullscreen(), windowScene: activeWindowScene())
+                        }
+                        .buttonStyle(.bordered).tint(.purple)
+
+                        Button("Carousel") {
+                            PaylisherCustomInAppNotificationManager.shared.customInAppFunction(
+                                userInfo: inAppMockCarousel(), windowScene: activeWindowScene())
+                        }
+                        .buttonStyle(.bordered).tint(.red)
+                    }
+                }
+
                 Section("Paylisher beers") {
                     if !api.beers.isEmpty {
                         ForEach(api.beers) { beer in
@@ -529,6 +566,53 @@ struct ContentView: View {
             print("testErrorLogging catch")
             PaylisherSDK.shared.capture("Error", properties: properties)
         }
+    }
+
+    // MARK: - InApp Message Demo Helpers
+
+    private func activeWindowScene() -> UIWindowScene? {
+        UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+    }
+
+    private func inAppMockModal() -> [AnyHashable: Any] {
+        let layouts = """
+        [{"style":{"radius":"20","bgColor":"#FFFFFF","verticalPosition":"center"},"close":{"active":"true","type":"icon","position":"outside-right","icon":{"color":"#333333","style":"outlined"}},"extra":{"overlay":{"action":"close","color":"#000000"},"transition":"bottom-to-top"},"blocks":{"align":"top","order":[{"type":"image","order":"1","url":"https://picsum.photos/seed/modal/400/200","radius":"0","margin":"0"},{"type":"spacer","order":"2","verticalSpacing":"12"},{"type":"text","order":"3","content":{"en":"🎉 Special Offer!"},"color":"#1A1A1A","fontSize":"20","fontWeight":"bold","textAlignment":"center","horizontalMargin":"16"},{"type":"text","order":"4","content":{"en":"Get 30% off your next purchase. Limited time — don't miss out!"},"color":"#555555","fontSize":"14","textAlignment":"center","horizontalMargin":"16"},{"type":"spacer","order":"5","verticalSpacing":"12"},{"type":"buttonGroup","order":"6","buttonGroupType":"double-horizontal","buttons":[{"label":{"en":"Get Offer"},"action":"https://paylisher.com","textColor":"#FFFFFF","backgroundColor":"#007AFF","borderColor":"#007AFF","borderRadius":"10","horizontalSize":"large","verticalSize":"small","margin":"8"},{"label":{"en":"Dismiss"},"action":"dismiss","textColor":"#333333","backgroundColor":"#F0F0F0","borderColor":"#CCCCCC","borderRadius":"10","horizontalSize":"large","verticalSize":"small","margin":"8"}]},{"type":"spacer","order":"7","verticalSpacing":"8"}]}}]
+        """
+        return ["defaultLang": "en", "layoutType": "modal", "layouts": layouts]
+    }
+
+    private func inAppMockBanner() -> [AnyHashable: Any] {
+        let layouts = """
+        [{"style":{"radius":"12","bgColor":"#1C1C1E","verticalPosition":"top"},"close":{"active":"true","type":"icon","position":"right","icon":{"color":"#FFFFFF","style":"basic"}},"extra":{"banner":{"action":"https://paylisher.com","duration":"4"}},"blocks":{"align":"center","order":[{"type":"image","order":"1","url":"https://picsum.photos/seed/banner/120/120","radius":"8","margin":"8"},{"type":"text","order":"2","content":{"en":"🔔 New message! Tap to view your exclusive offer."},"color":"#FFFFFF","fontSize":"14","fontWeight":"bold","textAlignment":"left","horizontalMargin":"8"}]}}]
+        """
+        return ["defaultLang": "en", "layoutType": "banner", "layouts": layouts]
+    }
+
+    private func inAppMockNative() -> [AnyHashable: Any] {
+        let native = """
+        {"title":{"en":"Welcome Back! 👋"},"body":{"en":"You have a new reward waiting for you. Check it out now and claim your points before they expire."},"imageUrl":"https://picsum.photos/seed/native/400/200","actionUrl":"https://paylisher.com","actionText":"Claim Now"}
+        """
+        return [
+            "type": "inApp",
+            "defaultLang": "en",
+            "gcm.message_id": UUID().uuidString,
+            "native": native
+        ]
+    }
+
+    private func inAppMockFullscreen() -> [AnyHashable: Any] {
+        let layouts = """
+        [{"style":{"radius":"0","bgColor":"#0A0A0A","bgImage":"https://picsum.photos/seed/fullscreen/800/1200","bgImageMask":"true","bgImageColor":"#000000"},"close":{"active":"true","type":"icon","position":"right","icon":{"color":"#FFFFFF","style":"outlined"}},"extra":{"transition":"right-to-left"},"blocks":{"align":"bottom","order":[{"type":"spacer","order":"1","fillAvailableSpacing":"true"},{"type":"text","order":"2","content":{"en":"SUMMER SALE"},"color":"#FFFFFF","fontSize":"32","fontWeight":"bold","textAlignment":"center","horizontalMargin":"24"},{"type":"text","order":"3","content":{"en":"Up to 50% off on selected items. Today only."},"color":"#E0E0E0","fontSize":"16","textAlignment":"center","horizontalMargin":"24"},{"type":"spacer","order":"4","verticalSpacing":"24"},{"type":"buttonGroup","order":"5","buttonGroupType":"single-vertical","buttons":[{"label":{"en":"Shop Now"},"action":"https://paylisher.com","textColor":"#000000","backgroundColor":"#FFFFFF","borderRadius":"30","horizontalSize":"large","verticalSize":"small","margin":"24"}]},{"type":"spacer","order":"6","verticalSpacing":"32"}]}}]
+        """
+        return ["defaultLang": "en", "layoutType": "fullscreen", "layouts": layouts]
+    }
+
+    private func inAppMockCarousel() -> [AnyHashable: Any] {
+        let layouts = """
+        [{"style":{"navigationalArrows":"true","radius":"16","bgColor":"#FFFFFF","verticalPosition":"center"},"close":{"active":"true","type":"icon","position":"outside-right","icon":{"color":"#333333","style":"basic"}},"extra":{"overlay":{"action":"close","color":"#000000"},"transition":"no-transition"},"blocks":{"align":"top","order":[{"type":"image","order":"1","url":"https://picsum.photos/seed/carousel1/400/200","radius":"0","margin":"0"},{"type":"spacer","order":"2","verticalSpacing":"12"},{"type":"text","order":"3","content":{"en":"Slide 1: New Arrivals 🆕"},"color":"#1A1A1A","fontSize":"18","fontWeight":"bold","textAlignment":"center","horizontalMargin":"16"},{"type":"text","order":"4","content":{"en":"Fresh styles just landed. Be the first to explore."},"color":"#555555","fontSize":"13","textAlignment":"center","horizontalMargin":"16"},{"type":"spacer","order":"5","verticalSpacing":"12"},{"type":"buttonGroup","order":"6","buttonGroupType":"single-vertical","buttons":[{"label":{"en":"Explore"},"action":"https://paylisher.com","textColor":"#FFFFFF","backgroundColor":"#FF6B35","borderRadius":"10","horizontalSize":"large","verticalSize":"small","margin":"16"}]},{"type":"spacer","order":"7","verticalSpacing":"8"}]}},{"style":{"navigationalArrows":"true","radius":"16","bgColor":"#FFFFFF","verticalPosition":"center"},"close":{"active":"true","type":"icon","position":"outside-right","icon":{"color":"#333333","style":"basic"}},"extra":{"overlay":{"action":"close","color":"#000000"},"transition":"no-transition"},"blocks":{"align":"top","order":[{"type":"image","order":"1","url":"https://picsum.photos/seed/carousel2/400/200","radius":"0","margin":"0"},{"type":"spacer","order":"2","verticalSpacing":"12"},{"type":"text","order":"3","content":{"en":"Slide 2: Members Only 🔒"},"color":"#1A1A1A","fontSize":"18","fontWeight":"bold","textAlignment":"center","horizontalMargin":"16"},{"type":"text","order":"4","content":{"en":"Exclusive deals for our loyalty members. Join today."},"color":"#555555","fontSize":"13","textAlignment":"center","horizontalMargin":"16"},{"type":"spacer","order":"5","verticalSpacing":"12"},{"type":"buttonGroup","order":"6","buttonGroupType":"single-vertical","buttons":[{"label":{"en":"Join Now"},"action":"https://paylisher.com","textColor":"#FFFFFF","backgroundColor":"#FF6B35","borderRadius":"10","horizontalSize":"large","verticalSize":"small","margin":"16"}]},{"type":"spacer","order":"7","verticalSpacing":"8"}]}},{"style":{"navigationalArrows":"true","radius":"16","bgColor":"#FFFFFF","verticalPosition":"center"},"close":{"active":"true","type":"icon","position":"outside-right","icon":{"color":"#333333","style":"basic"}},"extra":{"overlay":{"action":"close","color":"#000000"},"transition":"no-transition"},"blocks":{"align":"top","order":[{"type":"image","order":"1","url":"https://picsum.photos/seed/carousel3/400/200","radius":"0","margin":"0"},{"type":"spacer","order":"2","verticalSpacing":"12"},{"type":"text","order":"3","content":{"en":"Slide 3: Last Chance ⏰"},"color":"#1A1A1A","fontSize":"18","fontWeight":"bold","textAlignment":"center","horizontalMargin":"16"},{"type":"text","order":"4","content":{"en":"Sale ends tonight. Don't miss your savings."},"color":"#555555","fontSize":"13","textAlignment":"center","horizontalMargin":"16"},{"type":"spacer","order":"5","verticalSpacing":"12"},{"type":"buttonGroup","order":"6","buttonGroupType":"single-vertical","buttons":[{"label":{"en":"Shop Now"},"action":"https://paylisher.com","textColor":"#FFFFFF","backgroundColor":"#FF6B35","borderRadius":"10","horizontalSize":"large","verticalSize":"small","margin":"16"}]},{"type":"spacer","order":"7","verticalSpacing":"8"}]}}]
+        """
+        return ["defaultLang": "en", "layoutType": "modal-carousel", "layouts": layouts]
     }
 }
 

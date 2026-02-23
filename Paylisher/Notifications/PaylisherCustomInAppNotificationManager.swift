@@ -308,6 +308,41 @@ public class PaylisherCustomInAppNotificationManager {
     
     
     
+    /// Direct show method — accepts a pre-built CustomInAppPayload without JSON parsing.
+    /// Mirrors Android's InAppMessageHelper.showCustomInAppMessage* API for programmatic use.
+    public func showCustomInApp(_ payload: CustomInAppPayload, windowScene: UIWindowScene?) {
+        let lang = payload.defaultLang ?? "en"
+        let layoutType = payload.layoutType ?? "modal"
+
+        guard let layouts = payload.layouts, !layouts.isEmpty,
+              let firstLayout = layouts.first,
+              let style = firstLayout.style,
+              let close = firstLayout.close,
+              let extra = firstLayout.extra,
+              let blocks = firstLayout.blocks else {
+            print("[Paylisher] showCustomInApp: payload missing required layout fields")
+            return
+        }
+
+        let styleVC = StyleViewController(
+            style: style,
+            close: close,
+            extra: extra,
+            blocks: blocks,
+            defaultLang: lang,
+            layoutType: layoutType
+        )
+        styleVC.modalPresentationStyle = .overFullScreen
+
+        DispatchQueue.main.async {
+            let scene = windowScene ?? (UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene)
+            guard let keyWindow = scene?.windows.first(where: { $0.isKeyWindow }),
+                  let rootVC = keyWindow.rootViewController else { return }
+            rootVC.present(styleVC, animated: false)
+        }
+    }
+
    /* public func customInAppFunction(userInfo: [AnyHashable: Any]) {
 
         if let layoutString = userInfo["layouts"] as? String {
