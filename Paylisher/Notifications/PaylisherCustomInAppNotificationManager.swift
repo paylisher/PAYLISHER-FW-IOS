@@ -84,20 +84,19 @@ public class PaylisherCustomInAppNotificationManager {
             print("Payload parse edilemedi.")
             return
         }
-        
-       
+
+        // Delegate all routing & presentation to showCustomInApp
+        showCustomInApp(payload, windowScene: windowScene)
+
         let lang = payload.defaultLang ?? "en"
         let layoutType = payload.layoutType ?? "modal"
         print("📐 [Paylisher] Layout Type:", layoutType)
-        
-        
+
         if let layouts = payload.layouts, !layouts.isEmpty {
             let firstLayout = layouts[0]
-            
-            
-            
+
             print("--------------Style---------------")
-            
+
             if let style = firstLayout.style, let close = firstLayout.close, let extra = firstLayout.extra, let blocks = firstLayout.blocks {
                 print("navigationalArrows: ", style.navigationalArrows ?? "")
                 print("radius: ", style.radius ?? "")
@@ -108,17 +107,7 @@ public class PaylisherCustomInAppNotificationManager {
                 print("verticalPosition: ", style.verticalPosition ?? "")
                 print("horizontalPosition: ", style.horizontalPosition ?? "boş")
                 print("active: ", close.active ?? "")
-                
-                let styleVC = StyleViewController(style: style, close: close, extra: extra, blocks: blocks, defaultLang: lang, layoutType: layoutType)
-                styleVC.modalPresentationStyle = .overFullScreen
-
-                if windowScene != nil,
-                   let keyWindow = windowScene?.windows.first(where: { $0.isKeyWindow }),
-                   let rootVC = keyWindow.rootViewController {
-                       rootVC.present(styleVC, animated: false)
-                }
-//#endif
-
+                let _ = (style, close, extra, blocks) // suppress unused-variable warning
             }
             
             

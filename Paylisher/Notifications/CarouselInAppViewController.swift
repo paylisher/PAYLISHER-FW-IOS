@@ -119,6 +119,20 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         view.addSubview(nextArrow)
 
         // Container positioning
+        // Arrows are always inside the container (centered vertically, at left/right edges).
+        // This avoids overflow on narrow modal layouts and works for fullscreen too.
+        let arrowConstraints: [NSLayoutConstraint] = [
+            prevArrow.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            prevArrow.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
+            prevArrow.widthAnchor.constraint(equalToConstant: 36),
+            prevArrow.heightAnchor.constraint(equalToConstant: 36),
+
+            nextArrow.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            nextArrow.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
+            nextArrow.widthAnchor.constraint(equalToConstant: 36),
+            nextArrow.heightAnchor.constraint(equalToConstant: 36),
+        ]
+
         if isFullscreen {
             NSLayoutConstraint.activate([
                 containerView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -134,17 +148,6 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 pageControl.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor, constant: -8),
                 pageControl.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
                 pageControl.heightAnchor.constraint(equalToConstant: 24),
-            ])
-            NSLayoutConstraint.activate([
-                prevArrow.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-                prevArrow.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 16),
-                prevArrow.widthAnchor.constraint(equalToConstant: 36),
-                prevArrow.heightAnchor.constraint(equalToConstant: 36),
-
-                nextArrow.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-                nextArrow.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -16),
-                nextArrow.widthAnchor.constraint(equalToConstant: 36),
-                nextArrow.heightAnchor.constraint(equalToConstant: 36),
             ])
         } else {
             // Modal carousel: centered, 350pt wide, 65% of screen height
@@ -163,19 +166,9 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 pageControl.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
                 pageControl.heightAnchor.constraint(equalToConstant: 24),
             ])
-            // Arrows outside the containerView
-            NSLayoutConstraint.activate([
-                prevArrow.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-                prevArrow.trailingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: -4),
-                prevArrow.widthAnchor.constraint(equalToConstant: 36),
-                prevArrow.heightAnchor.constraint(equalToConstant: 36),
-
-                nextArrow.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
-                nextArrow.leadingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: 4),
-                nextArrow.widthAnchor.constraint(equalToConstant: 36),
-                nextArrow.heightAnchor.constraint(equalToConstant: 36),
-            ])
         }
+
+        NSLayoutConstraint.activate(arrowConstraints)
 
         applyStyleFromFirstLayout()
         applyCloseFromFirstLayout()
@@ -240,13 +233,23 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             }
         }
 
-        let position = close.position ?? "right"
-        // For fullscreen use safeArea, for modal containerView.topAnchor is already safe
+        // For fullscreen use safeArea; for modal, containerView.topAnchor is safe.
         let topAnchor: NSLayoutYAxisAnchor = isFullscreen
             ? view.safeAreaLayoutGuide.topAnchor
             : containerView.topAnchor
 
-        switch position {
+        // "outside-*" positions are only safe when there is room beside the container.
+        // For modal carousel (350pt on ~393pt screen) they would overflow, so treat
+        // them as "right"/"left" inside the container.
+        let position = close.position ?? "right"
+        let resolvedPosition: String
+        if !isFullscreen && (position == "outside-left" || position == "outside-right") {
+            resolvedPosition = position == "outside-left" ? "left" : "right"
+        } else {
+            resolvedPosition = position
+        }
+
+        switch resolvedPosition {
         case "left":
             NSLayoutConstraint.activate([
                 closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
@@ -254,12 +257,12 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             ])
         case "outside-left":
             NSLayoutConstraint.activate([
-                closeButton.topAnchor.constraint(equalTo: topAnchor, constant: isFullscreen ? 8 : -28),
+                closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
                 closeButton.trailingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
             ])
         case "outside-right":
             NSLayoutConstraint.activate([
-                closeButton.topAnchor.constraint(equalTo: topAnchor, constant: isFullscreen ? 8 : -28),
+                closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
                 closeButton.leadingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
             ])
         default: // "right"
