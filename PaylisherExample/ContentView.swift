@@ -269,6 +269,12 @@ struct ContentView: View {
                             }
                             .buttonStyle(.bordered)
                             .tint(.orange)
+                            
+                            Button("profile (auth)") {
+                                testDeepLink("myapp://profile?auth=required")
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(.purple)
                         }
                     }
                 }
@@ -348,6 +354,36 @@ struct ContentView: View {
                             .foregroundColor(.white)
                             .padding()
                             .background(Color.green)
+                            .cornerRadius(10)
+                    }
+                    
+                    NavigationLink(destination: LoginView(onLoginSuccess: { dest in
+                        // SwiftUI'da (özellikle eski tip NavigationLink'te) açık olan view'i
+                        // kapatmadan yenisini push etmek sorun yaratır.
+                        // Önce LoginView'i pop (kapat) ediyoruz:
+                        deepLinkDestination = nil
+                        
+                        if let d = dest {
+                            // Pop animasyonunun tamamlanması için kısa bir süre bekleyip yeni sayfayı push ediyoruz.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                AppDelegate.deepLinkNavigationPublisher.send(d)
+                            }
+                        }
+                    }), tag: "LoginView", selection: $deepLinkDestination) {
+                        Text("Login Ekranına Git")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.blue)
+                            .cornerRadius(10)
+                    }
+                    
+                    NavigationLink(destination: ProfileView(), tag: "profile", selection: $deepLinkDestination) {
+                        Text("Profile (Auth Required)")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .background(Color.purple)
                             .cornerRadius(10)
                     }
                 }

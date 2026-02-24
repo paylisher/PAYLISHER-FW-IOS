@@ -263,16 +263,20 @@ extension AppDelegate: PaylisherDeepLinkHandler {
     func paylisherDeepLinkRequiresAuth(_ deepLink: PaylisherDeepLink, completion: @escaping (Bool) -> Void) {
         print("🔐 Auth gerekli: \(deepLink.destination)")
         
-        // Burada login ekranını göster
-        // Login başarılı olursa completion(true), değilse completion(false) çağır
+        let authManager = FakeAuthManager.shared
         
-        // Örnek: Login ekranına yönlendir
-        DispatchQueue.main.async {
-            AppDelegate.deepLinkNavigationPublisher.send("LoginView")
+        if authManager.isAuthenticated {
+            print("✅ User already authenticated")
+            completion(true)
+        } else {
+            print("❌ User not authenticated, show login")
+            authManager.setPendingDeepLink(destination: deepLink.destination)
+            
+            DispatchQueue.main.async {
+                AppDelegate.deepLinkNavigationPublisher.send("LoginView")
+            }
+            completion(false)
         }
-        
-        // Not: Gerçek implementasyonda login sonucuna göre completion çağrılmalı
-        // Şimdilik false döndürüyoruz, login ekranı handle edecek
     }
     
     /// Deep link parse hatası olduğunda çağrılır (opsiyonel)
