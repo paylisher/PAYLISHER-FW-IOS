@@ -178,6 +178,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
                      didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         
+        // Paylisher silent heartbeat check – if handled, return early
+        if PaylisherSDK.shared.handleSilentPush(userInfo, completionHandler: completionHandler) {
+            return
+        }
+        
+        // Existing notification handling for non-heartbeat pushes
         let state = UIApplication.shared.applicationState
         
         let windowScene = UIApplication.shared.connectedScenes
@@ -223,8 +229,8 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             }
             print("token: \(token)")
 
-            // FCM token alındı - identify() butona taşındı
-            // İsteğe bağlı olarak token'ı user property olarak set edebilirsiniz
+            // Register FCM token with Paylisher SDK for heartbeat / uninstall detection
+            PaylisherSDK.shared.registerFCMToken(token)
         }
     }
 }
