@@ -80,6 +80,9 @@ internal class PaylisherDeviceFingerprint {
         print("💿 [2/5] OS Version: \(osVersion)")
 
         // 3. Screen width (orientation-safe, physical pixels)
+        // Uses bounds * scale to match web bridge's screen.width * devicePixelRatio.
+        // Height is excluded: browser screen.height * DPR differs from native heightPixels
+        // by ~2px due to status bar / nav bar calculation differences.
         let bounds = UIScreen.main.bounds
         let scale = UIScreen.main.scale
         let widthPx = Int(bounds.width * scale)
