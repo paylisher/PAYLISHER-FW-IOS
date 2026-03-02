@@ -144,12 +144,12 @@ class StyleViewController: UIViewController {
             ])
 
         case "banner":
-            // Banner: edge-to-edge, fixed 26% height, position-aware corner masking
+            // Banner: floating pill, fixed 26% height, position-aware
             let verticalPos = style.verticalPosition ?? "center"
 
             NSLayoutConstraint.activate([
-                containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+                containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
                 scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
                 scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16),
@@ -157,11 +157,10 @@ class StyleViewController: UIViewController {
 
             switch verticalPos {
             case "top":
-                // Flush with top edge; content starts below status bar
-                containerView.topAnchor.constraint(equalTo: view.topAnchor).isActive = true
-                scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor).isActive = true
+                containerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16).isActive = true
+                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16).isActive = true
             case "bottom":
-                containerView.bottomAnchor.constraint(equalTo: view.bottomAnchor).isActive = true
+                containerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16).isActive = true
                 scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16).isActive = true
             default: // center
                 containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
@@ -227,18 +226,6 @@ class StyleViewController: UIViewController {
         } else if layoutType == "banner" {
             let radiusValue = CGFloat(style.radius ?? 35)
             containerView.layer.cornerRadius = radiusValue
-            // Only round exposed corners based on position
-            let verticalPos = style.verticalPosition ?? "center"
-            switch verticalPos {
-            case "top":
-                // Flush with top edge — only bottom corners are rounded
-                containerView.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
-            case "bottom":
-                // Container flush with bottom edge — only top corners rounded
-                containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-            default: // center: all corners rounded
-                break
-            }
         } else {
             let radiusValue = CGFloat(style.radius ?? 8)
             containerView.layer.cornerRadius = radiusValue
