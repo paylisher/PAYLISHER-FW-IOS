@@ -41,7 +41,8 @@ public class PaylisherCustomInAppNotificationManager {
 
     private func dedupeKey(for payload: CustomInAppPayload) -> String {
         if let pushId = normalizedPushId(payload) {
-            return "pushId:\(pushId)"
+            let displayTimePart = payload.condition?.displayTime ?? 0
+            return "pushId:\(pushId):display:\(displayTimePart)"
         }
         return fallbackInAppFingerprint(payload)
     }
