@@ -7,16 +7,75 @@
 
 import Foundation
 import UIKit
+import CryptoKit
 
 //@available(iOSApplicationExtension, unavailable)
 public class PaylisherCustomInAppNotificationManager {
     
     public static let shared = PaylisherCustomInAppNotificationManager()
+    private let inAppShownCacheKey = "com.paylisher.ios.inapp.shown"
+    private let inAppShownTTLSeconds: TimeInterval = 24 * 60 * 60
     
     
     
     private init() {
         
+    }
+
+    private func normalizedPushId(_ payload: CustomInAppPayload) -> String? {
+        let trimmed = payload.pushId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func fallbackInAppFingerprint(_ payload: CustomInAppPayload) -> String {
+        let displayTimePart = payload.condition?.displayTime ?? 0
+        let typePart = payload.layoutType ?? "modal"
+        if let firstLayout = payload.layouts?.first,
+           let data = try? JSONEncoder().encode(firstLayout) {
+            let digest = SHA256.hash(data: data)
+            let hash = digest.map { String(format: "%02x", $0) }.joined()
+            return "fallback:\(typePart):\(displayTimePart):\(hash)"
+        }
+        return "fallback:\(typePart):\(displayTimePart):\(payload.defaultLang ?? "en")"
+    }
+
+    private func dedupeKey(for payload: CustomInAppPayload) -> String {
+        if let pushId = normalizedPushId(payload) {
+            return "pushId:\(pushId)"
+        }
+        return fallbackInAppFingerprint(payload)
+    }
+
+    private func loadShownInAppCache() -> [String: TimeInterval] {
+        let now = Date().timeIntervalSince1970
+        let raw = UserDefaults.standard.dictionary(forKey: inAppShownCacheKey) as? [String: TimeInterval] ?? [:]
+        let filtered = raw.filter { $0.value > now }
+        if filtered.count != raw.count {
+            UserDefaults.standard.set(filtered, forKey: inAppShownCacheKey)
+        }
+        return filtered
+    }
+
+    private func dedupeExpiryTimestamp(for payload: CustomInAppPayload, now: TimeInterval) -> TimeInterval {
+        let ttlExpiry = now + inAppShownTTLSeconds
+        if let expireMs = payload.condition?.expireDate, expireMs > 0 {
+            let expireSeconds = TimeInterval(expireMs) / 1000.0
+            return min(ttlExpiry, expireSeconds)
+        }
+        return ttlExpiry
+    }
+
+    private func shouldPresentInApp(_ payload: CustomInAppPayload) -> Bool {
+        let key = dedupeKey(for: payload)
+        let now = Date().timeIntervalSince1970
+        var cache = loadShownInAppCache()
+        if let expiresAt = cache[key], expiresAt > now {
+            print("[Paylisher] skip duplicate in-app key=\(key)")
+            return false
+        }
+        cache[key] = dedupeExpiryTimestamp(for: payload, now: now)
+        UserDefaults.standard.set(cache, forKey: inAppShownCacheKey)
+        return true
     }
     
    public func parseInAppPayload(from userInfo: [AnyHashable: Any], windowScene: UIWindowScene?) -> CustomInAppPayload? {
@@ -59,8 +118,15 @@ public class PaylisherCustomInAppNotificationManager {
                 else {
                     normalizedInfo[key] = value
                 }
+            } else if key == "condition" {
+                if let conditionString = value as? String,
+                   let data = conditionString.data(using: .utf8),
+                   let conditionObject = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                    normalizedInfo[key] = conditionObject
+                } else if let conditionObject = value as? [String: Any] {
+                    normalizedInfo[key] = conditionObject
+                }
             } else {
-                
                 normalizedInfo[key] = value
             }
         }
@@ -300,6 +366,8 @@ public class PaylisherCustomInAppNotificationManager {
     /// Direct show method — accepts a pre-built CustomInAppPayload without JSON parsing.
     /// Mirrors Android's InAppMessageHelper.showCustomInAppMessage* API for programmatic use.
     public func showCustomInApp(_ payload: CustomInAppPayload, windowScene: UIWindowScene?) {
+        guard shouldPresentInApp(payload) else { return }
+
         let lang       = payload.defaultLang ?? "en"
         let layoutType = payload.layoutType ?? "modal"
 

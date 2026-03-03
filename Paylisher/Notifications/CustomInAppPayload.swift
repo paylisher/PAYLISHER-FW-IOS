@@ -10,11 +10,64 @@ import Foundation
 
 public struct CustomInAppPayload: Codable {
    
+    let pushId: String?
+    let condition: Condition?
+
     let defaultLang: String?
    
     let layoutType: String?
    
     let layouts: [Layout]?
+
+    struct Condition: Codable {
+        let target: String?
+        let displayTime: Int64?
+        let expireDate: Int64?
+        let delay: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case target
+            case displayTime
+            case expireDate
+            case delay
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.target = try? container.decode(String.self, forKey: .target)
+            self.displayTime = Self.decodeInt64(container, forKey: .displayTime)
+            self.expireDate = Self.decodeInt64(container, forKey: .expireDate)
+            self.delay = Self.decodeInt(container, forKey: .delay)
+        }
+
+        private static func decodeInt64(
+            _ container: KeyedDecodingContainer<CodingKeys>,
+            forKey key: CodingKeys
+        ) -> Int64? {
+            if let raw = try? container.decode(String.self, forKey: key),
+               let value = Int64(raw) {
+                return value
+            }
+            if let value = try? container.decode(Int64.self, forKey: key) {
+                return value
+            }
+            if let value = try? container.decode(Int.self, forKey: key) {
+                return Int64(value)
+            }
+            return nil
+        }
+
+        private static func decodeInt(
+            _ container: KeyedDecodingContainer<CodingKeys>,
+            forKey key: CodingKeys
+        ) -> Int? {
+            if let raw = try? container.decode(String.self, forKey: key),
+               let value = Int(raw) {
+                return value
+            }
+            return try? container.decode(Int.self, forKey: key)
+        }
+    }
     
     
     struct Layout: Codable {
@@ -535,4 +588,3 @@ public struct CustomInAppPayload: Codable {
         }
     }
 }
-

@@ -8,6 +8,9 @@
 import UIKit
 
 class StyleViewController: UIViewController {
+    private let modalHeightRatio: CGFloat = 0.48
+    private let modalImageHeightRatio: CGFloat = 0.36
+    private let modalImageMinHeight: CGFloat = 72
 
     private let style: CustomInAppPayload.Layout.Style
     
@@ -171,33 +174,22 @@ class StyleViewController: UIViewController {
             containerView.heightAnchor.constraint(equalToConstant: UIScreen.main.bounds.height * 0.26).isActive = true
 
         default:
-            // Modal (default): centered, 350px wide, dynamic height
+            // Modal (default): centered, screen-based frame
             let cY = containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
             cY.identifier = "containerCenterY"
             centerYConstraint = cY
 
             NSLayoutConstraint.activate([
-                containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
+                containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
                 cY,
-                containerView.widthAnchor.constraint(equalToConstant: 350),
+                containerView.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: modalHeightRatio),
 
-                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+                scrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16),
                 scrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 scrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
+                scrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16),
             ])
-
-            // Dynamic height: fit content, max 75% of screen
-            let fitHeight = containerView.heightAnchor.constraint(equalTo: scrollView.contentLayoutGuide.heightAnchor, constant: 16)
-            fitHeight.priority = .defaultHigh
-            fitHeight.isActive = true
-
-            let maxHeight = containerView.heightAnchor.constraint(lessThanOrEqualToConstant: UIScreen.main.bounds.height * 0.75)
-            maxHeight.isActive = true
-
-            let minHeight = containerView.heightAnchor.constraint(greaterThanOrEqualToConstant: 80)
-            minHeight.priority = .defaultLow
-            minHeight.isActive = true
         }
 
         applyStyle(centerYConstraint: centerYConstraint)
@@ -226,6 +218,8 @@ class StyleViewController: UIViewController {
         } else if layoutType == "banner" {
             let radiusValue = CGFloat(style.radius ?? 35)
             containerView.layer.cornerRadius = radiusValue
+        } else if layoutType == "modal" {
+            containerView.layer.cornerRadius = 8
         } else {
             let radiusValue = CGFloat(style.radius ?? 8)
             containerView.layer.cornerRadius = radiusValue
@@ -237,14 +231,7 @@ class StyleViewController: UIViewController {
             addBackgroundImage(urlString: bgImageStr)
         }
 
-        // Only apply verticalPosition override for modal layout (banner handles it in setupUI)
-        if layoutType == "modal", style.verticalPosition == "bottom", let cY = centerYConstraint {
-            cY.isActive = false
-            containerView.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor,
-                constant: -20
-            ).isActive = true
-        }
+        // Modal position is fixed to center by product rule.
     }
     
     private func applyClose() {
@@ -574,10 +561,17 @@ class StyleViewController: UIViewController {
             imageView.layer.cornerRadius = CGFloat(radius)
         }
 
-        let imageHeight: CGFloat = layoutType == "banner" ? 60 : 150
-        let heightConstraint = imageView.heightAnchor.constraint(equalToConstant: imageHeight)
-        heightConstraint.priority = .defaultHigh
-        heightConstraint.isActive = true
+        if layoutType == "banner" {
+            let heightConstraint = imageView.heightAnchor.constraint(equalToConstant: 60)
+            heightConstraint.priority = .required
+            heightConstraint.isActive = true
+        } else {
+            let modalHeight = UIScreen.main.bounds.height * modalHeightRatio
+            let imageHeight = max(modalHeight * modalImageHeightRatio, modalImageMinHeight)
+            let heightConstraint = imageView.heightAnchor.constraint(equalToConstant: imageHeight)
+            heightConstraint.priority = .required
+            heightConstraint.isActive = true
+        }
 
         if let urlString = block.url, let url = URL(string: urlString) {
             URLSession.shared.dataTask(with: url) { data, _, _ in
