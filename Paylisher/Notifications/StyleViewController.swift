@@ -103,7 +103,16 @@ class StyleViewController: UIViewController {
 
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.isHidden = true
+        closeButton.layer.zPosition = 1000
+        closeButton.contentHorizontalAlignment = .center
+        closeButton.contentVerticalAlignment = .center
+        closeButton.imageView?.contentMode = .scaleAspectFit
         view.addSubview(closeButton)
+
+        NSLayoutConstraint.activate([
+            closeButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 36),
+            closeButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
+        ])
 
         containerView.addSubview(arrowImageView)
 
@@ -292,26 +301,24 @@ class StyleViewController: UIViewController {
             ])
         }
 
-        if let type = close.type {
-                   switch type {
-                   case "icon":
-                       // icon: color, style (“outlined”, “filled”, “basic”)
-                       applyCloseIcon(close.icon)
-                       
-                   case "text":
-                       // text: label, fontSize, color
-                       applyCloseText(close.text)
-                       
-                   default:
-                       break
-                   }
-               }
+        let closeType = close.type ?? "icon"
+        switch closeType {
+        case "text":
+            applyCloseText(close.text)
+        default:
+            // Use icon as default so close button never becomes invisible because of missing type.
+            applyCloseIcon(close.icon)
+        }
         
     }
     
     private func applyCloseIcon(_ icon: CustomInAppPayload.Layout.Close.Icon?) {
         
         closeButton.setTitle(nil, for: .normal)
+        closeButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
+        closeButton.layer.cornerRadius = 18
+        closeButton.layer.masksToBounds = true
+        closeButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
                
                
                var systemImageName = "xmark"  // basic
@@ -324,6 +331,10 @@ class StyleViewController: UIViewController {
         let image = UIImage(systemName: systemImageName)
         
         closeButton.setImage(image, for: .normal)
+        closeButton.setPreferredSymbolConfiguration(
+            UIImage.SymbolConfiguration(pointSize: 18, weight: .bold),
+            forImageIn: .normal
+        )
                 
                 if let hex = icon?.color, let color = UIColor(hex: hex) {
                     closeButton.tintColor = color
@@ -335,6 +346,10 @@ class StyleViewController: UIViewController {
     private func applyCloseText(_ textData: CustomInAppPayload.Layout.Close.CloseText?) {
         
         closeButton.setImage(nil, for: .normal)
+        closeButton.backgroundColor = .clear
+        closeButton.layer.cornerRadius = 0
+        closeButton.layer.masksToBounds = false
+        closeButton.contentEdgeInsets = .zero
         
         let lang = defaultLang
         
