@@ -12,7 +12,7 @@ class StyleViewController: UIViewController {
     private let modalImageHeightRatio: CGFloat = 0.36
     private let modalImageMinHeight: CGFloat = 72
     private let baseHorizontalInset: CGFloat = 16
-    private let extraHorizontalInset: CGFloat = 3
+    private let extraHorizontalInset: CGFloat = 6
 
     private let style: CustomInAppPayload.Layout.Style
     
