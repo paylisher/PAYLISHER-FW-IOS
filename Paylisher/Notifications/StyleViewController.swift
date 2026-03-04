@@ -595,7 +595,10 @@ class StyleViewController: UIViewController {
             }.resume()
         }
 
-        let margin = CGFloat(block.margin ?? 0)
+        let rawMargin = CGFloat(block.margin ?? 0)
+        // Preview contract: fullscreen image blocks keep a default horizontal inset
+        // even when payload margin is 0.
+        let margin: CGFloat = (layoutType == "fullscreen" && rawMargin <= 0) ? 16 : rawMargin
         let wrapper = UIView()
         let frameView = UIView()
         frameView.translatesAutoresizingMaskIntoConstraints = false
@@ -658,14 +661,21 @@ class StyleViewController: UIViewController {
         ]
 
         let hSize = (block.horizontalSize ?? "").isEmpty ? "auto" : block.horizontalSize!
+        let normalizedHSize: String
+        switch hSize {
+        case "large":
+            normalizedHSize = "full"
+        default:
+            normalizedHSize = hSize
+        }
 
-        if hSize == "full" {
+        if normalizedHSize == "full" {
             // Full width - buttonPosition is irrelevant
             constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
             constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
         } else {
             // half or auto: apply width then position
-            if hSize == "half" {
+            if normalizedHSize == "half" {
                 constraints.append(button.widthAnchor.constraint(equalTo: wrapper.widthAnchor, multiplier: 0.5))
             } else {
                 // auto: content-hugging size with min padding
