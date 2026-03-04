@@ -596,9 +596,9 @@ class StyleViewController: UIViewController {
         }
 
         let rawMargin = CGFloat(block.margin ?? 0)
-        // Preview contract: fullscreen image blocks keep a default horizontal inset
-        // even when payload margin is 0.
-        let margin: CGFloat = (layoutType == "fullscreen" && rawMargin <= 0) ? 16 : rawMargin
+        // Preview/Android contract: keep image inset on X axis only.
+        let horizontalMargin: CGFloat = (layoutType == "fullscreen" && rawMargin <= 0) ? 16 : rawMargin
+        let verticalMargin: CGFloat = 0
         let wrapper = UIView()
         let frameView = UIView()
         frameView.translatesAutoresizingMaskIntoConstraints = false
@@ -610,10 +610,10 @@ class StyleViewController: UIViewController {
         wrapper.addSubview(frameView)
         frameView.addSubview(imageView)
         NSLayoutConstraint.activate([
-            frameView.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: margin),
-            frameView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -margin),
-            frameView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: margin),
-            frameView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -margin),
+            frameView.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: verticalMargin),
+            frameView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -verticalMargin),
+            frameView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: horizontalMargin),
+            frameView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -horizontalMargin),
 
             imageView.topAnchor.constraint(equalTo: frameView.topAnchor),
             imageView.bottomAnchor.constraint(equalTo: frameView.bottomAnchor),
