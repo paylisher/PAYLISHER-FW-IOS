@@ -11,6 +11,8 @@ class StyleViewController: UIViewController {
     private let modalHeightRatio: CGFloat = 0.48
     private let modalImageHeightRatio: CGFloat = 0.36
     private let modalImageMinHeight: CGFloat = 72
+    private let baseHorizontalInset: CGFloat = 16
+    private let extraHorizontalInset: CGFloat = 3
 
     private let style: CustomInAppPayload.Layout.Style
     
@@ -43,6 +45,10 @@ class StyleViewController: UIViewController {
     }()
 
     private let defaultLang: String
+
+    private var contentHorizontalInset: CGFloat {
+        baseHorizontalInset + extraHorizontalInset
+    }
 
 
     init(style: CustomInAppPayload.Layout.Style,
@@ -534,14 +540,15 @@ class StyleViewController: UIViewController {
 
         let margin = CGFloat(block.horizontalMargin ?? 0)
         if margin > 0 {
+            let adjustedMargin = margin + extraHorizontalInset
             let wrapper = UIView()
             label.translatesAutoresizingMaskIntoConstraints = false
             wrapper.addSubview(label)
             NSLayoutConstraint.activate([
                 label.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 4),
                 label.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -4),
-                label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: margin),
-                label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -margin),
+                label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: adjustedMargin),
+                label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -adjustedMargin),
             ])
             return wrapper
         }
@@ -552,8 +559,8 @@ class StyleViewController: UIViewController {
         NSLayoutConstraint.activate([
             label.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 4),
             label.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -4),
-            label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16),
-            label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16),
+            label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: contentHorizontalInset),
+            label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -contentHorizontalInset),
         ])
 
         if let action = block.action, !action.isEmpty {
@@ -597,7 +604,8 @@ class StyleViewController: UIViewController {
 
         let rawMargin = CGFloat(block.margin ?? 0)
         // Preview/Android contract: keep image inset on X axis only.
-        let horizontalMargin: CGFloat = (layoutType == "fullscreen" && rawMargin <= 0) ? 16 : rawMargin
+        let horizontalMarginBase: CGFloat = (layoutType == "fullscreen" && rawMargin <= 0) ? baseHorizontalInset : rawMargin
+        let horizontalMargin: CGFloat = horizontalMarginBase + extraHorizontalInset
         let verticalMargin: CGFloat = 0
         let wrapper = UIView()
         let frameView = UIView()
@@ -671,24 +679,24 @@ class StyleViewController: UIViewController {
 
         if normalizedHSize == "full" {
             // Full width - buttonPosition is irrelevant
-            constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
-            constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
+            constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: contentHorizontalInset))
+            constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -contentHorizontalInset))
         } else {
             // half or auto: apply width then position
             if normalizedHSize == "half" {
                 constraints.append(button.widthAnchor.constraint(equalTo: wrapper.widthAnchor, multiplier: 0.5))
             } else {
                 // auto: content-hugging size with min padding
-                constraints.append(button.leadingAnchor.constraint(greaterThanOrEqualTo: wrapper.leadingAnchor, constant: 16))
-                constraints.append(button.trailingAnchor.constraint(lessThanOrEqualTo: wrapper.trailingAnchor, constant: -16))
+                constraints.append(button.leadingAnchor.constraint(greaterThanOrEqualTo: wrapper.leadingAnchor, constant: contentHorizontalInset))
+                constraints.append(button.trailingAnchor.constraint(lessThanOrEqualTo: wrapper.trailingAnchor, constant: -contentHorizontalInset))
                 button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 24, bottom: 8, right: 24)
             }
 
             switch block.buttonPosition {
             case "left":
-                constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
+                constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: contentHorizontalInset))
             case "right":
-                constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
+                constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -contentHorizontalInset))
             default:
                 constraints.append(button.centerXAnchor.constraint(equalTo: wrapper.centerXAnchor))
             }
@@ -753,8 +761,8 @@ class StyleViewController: UIViewController {
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 8),
             stack.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -8),
-            stack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16),
+            stack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: contentHorizontalInset),
+            stack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -contentHorizontalInset),
         ])
         return wrapper
     }
