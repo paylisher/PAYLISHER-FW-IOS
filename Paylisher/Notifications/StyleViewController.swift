@@ -569,12 +569,9 @@ class StyleViewController: UIViewController {
     private func renderImageBlock(_ block: CustomInAppPayload.Layout.Blocks.ImageBlock) -> UIView {
         let imageView = UIImageView()
         imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.contentMode = .scaleAspectFit
+        // Match preview/Android behavior: image fills a fixed frame (cropping if needed).
+        imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
-
-        if let radius = block.radius {
-            imageView.layer.cornerRadius = CGFloat(radius)
-        }
 
         if layoutType == "banner" {
             let heightConstraint = imageView.heightAnchor.constraint(equalToConstant: 60)
@@ -600,13 +597,25 @@ class StyleViewController: UIViewController {
 
         let margin = CGFloat(block.margin ?? 0)
         let wrapper = UIView()
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        wrapper.addSubview(imageView)
+        let frameView = UIView()
+        frameView.translatesAutoresizingMaskIntoConstraints = false
+        frameView.clipsToBounds = true
+        if let radius = block.radius {
+            frameView.layer.cornerRadius = CGFloat(radius)
+        }
+
+        wrapper.addSubview(frameView)
+        frameView.addSubview(imageView)
         NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: margin),
-            imageView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -margin),
-            imageView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: margin),
-            imageView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -margin),
+            frameView.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: margin),
+            frameView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -margin),
+            frameView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: margin),
+            frameView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -margin),
+
+            imageView.topAnchor.constraint(equalTo: frameView.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: frameView.bottomAnchor),
+            imageView.leadingAnchor.constraint(equalTo: frameView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: frameView.trailingAnchor),
         ])
 
         if let link = block.link, !link.isEmpty {
@@ -683,11 +692,38 @@ class StyleViewController: UIViewController {
         guard let buttons = block.buttons, !buttons.isEmpty else { return UIView() }
 
         let isHorizontal = block.buttonGroupType == "double-horizontal"
+
+        // For vertical groups, reuse single-button renderer so horizontalSize (half/full/auto),
+        // buttonPosition and margins behave exactly like the preview payload contract.
+        if !isHorizontal {
+            let wrapper = UIView()
+            let stack = UIStackView()
+            stack.axis = .vertical
+            stack.spacing = 0
+            stack.alignment = .fill
+            stack.distribution = .fill
+            stack.translatesAutoresizingMaskIntoConstraints = false
+
+            for btnData in buttons {
+                let buttonWrapper = renderButtonBlock(btnData)
+                stack.addArrangedSubview(buttonWrapper)
+            }
+
+            wrapper.addSubview(stack)
+            NSLayoutConstraint.activate([
+                stack.topAnchor.constraint(equalTo: wrapper.topAnchor),
+                stack.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+                stack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+                stack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+            ])
+            return wrapper
+        }
+
         let stack = UIStackView()
-        stack.axis = isHorizontal ? .horizontal : .vertical
+        stack.axis = .horizontal
         stack.spacing = 8
         stack.alignment = .fill
-        stack.distribution = isHorizontal ? .fillEqually : .fill
+        stack.distribution = .fillEqually
 
         for btnData in buttons {
             let btn = createStyledButton(btnData)
