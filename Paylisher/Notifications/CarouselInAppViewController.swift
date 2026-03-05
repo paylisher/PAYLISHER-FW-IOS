@@ -422,6 +422,22 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func updateArrows() {
+        guard layouts.count > 1 else {
+            prevArrow.isHidden = true
+            nextArrow.isHidden = true
+            return
+        }
+
+        let arrowsEnabled = layouts.indices.contains(currentIndex)
+            ? (layouts[currentIndex].style?.navigationalArrows == true)
+            : false
+
+        guard arrowsEnabled else {
+            prevArrow.isHidden = true
+            nextArrow.isHidden = true
+            return
+        }
+
         prevArrow.isHidden = currentIndex == 0
         nextArrow.isHidden = currentIndex == layouts.count - 1
     }

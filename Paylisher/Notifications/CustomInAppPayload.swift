@@ -102,8 +102,10 @@ public struct CustomInAppPayload: Codable {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
                 
                 // navigationalArrows
-                if let arrowsStr = try? container.decode(String.self, forKey: .navigationalArrows) {
-                    self.navigationalArrows = (arrowsStr == "true")
+                if let arrowsBool = try? container.decode(Bool.self, forKey: .navigationalArrows) {
+                    self.navigationalArrows = arrowsBool
+                } else if let arrowsStr = try? container.decode(String.self, forKey: .navigationalArrows) {
+                    self.navigationalArrows = (arrowsStr.lowercased() == "true")
                 } else {
                     self.navigationalArrows = false
                 }
