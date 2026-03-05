@@ -9,11 +9,30 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
 
     // MARK: - Properties
 
+    private let modalHeightRatio: CGFloat = 0.48
+    private let modalImageHeightRatio: CGFloat = 0.36
+    private let modalImageMinHeight: CGFloat = 72
+    private let baseHorizontalInset: CGFloat = 16
+    private let extraHorizontalInset: CGFloat = 6
+
     private let layouts: [CustomInAppPayload.Layout]
     private let defaultLang: String
     private let isFullscreen: Bool
 
     private var currentIndex: Int = 0
+    private var hasAppliedInitialTransition = false
+
+    private var closePositionConstraints: [NSLayoutConstraint] = []
+    private var bottomBarHeightConstraint: NSLayoutConstraint?
+
+    private var contentHorizontalInset: CGFloat {
+        baseHorizontalInset + extraHorizontalInset
+    }
+
+    private var currentLayout: CustomInAppPayload.Layout? {
+        guard layouts.indices.contains(currentIndex) else { return layouts.first }
+        return layouts[currentIndex]
+    }
 
     // MARK: - UI
 
@@ -24,6 +43,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
     private let closeButton    = UIButton(type: .system)
     private let prevArrow      = UIButton(type: .system)
     private let nextArrow      = UIButton(type: .system)
+    private let bottomBar      = UIView()
 
     // MARK: - Init
 
@@ -40,18 +60,37 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+
         setupUI()
+
         closeButton.addTarget(self, action: #selector(didTapClose), for: .touchUpInside)
         prevArrow.addTarget(self, action: #selector(didTapPrev), for: .touchUpInside)
         nextArrow.addTarget(self, action: #selector(didTapNext), for: .touchUpInside)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard !hasAppliedInitialTransition else { return }
+        hasAppliedInitialTransition = true
+        applyTransition()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+
+        let expectedOffsetX = pageScrollView.bounds.width * CGFloat(currentIndex)
+        if abs(pageScrollView.contentOffset.x - expectedOffsetX) > 1 {
+            pageScrollView.contentOffset = CGPoint(x: expectedOffsetX, y: 0)
+        }
+    }
+
     // MARK: - Setup
 
     private func setupUI() {
-        // Overlay
         overlayView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(overlayView)
+
         NSLayoutConstraint.activate([
             overlayView.topAnchor.constraint(equalTo: view.topAnchor),
             overlayView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -59,23 +98,20 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             overlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
 
-        // Container
         containerView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(containerView)
 
-        // Horizontal paging scroll view
-        pageScrollView.isPagingEnabled                = true
+        pageScrollView.isPagingEnabled = true
         pageScrollView.showsHorizontalScrollIndicator = false
-        pageScrollView.showsVerticalScrollIndicator   = false
-        pageScrollView.bounces                        = false
-        pageScrollView.delegate                       = self
+        pageScrollView.showsVerticalScrollIndicator = false
+        pageScrollView.bounces = false
+        pageScrollView.delegate = self
         pageScrollView.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(pageScrollView)
 
-        // Pages horizontal stack
         let pagesStack = UIStackView()
-        pagesStack.axis         = .horizontal
-        pagesStack.spacing      = 0
+        pagesStack.axis = .horizontal
+        pagesStack.spacing = 0
         pagesStack.distribution = .fillEqually
         pagesStack.translatesAutoresizingMaskIntoConstraints = false
         pageScrollView.addSubview(pagesStack)
@@ -88,7 +124,6 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             pagesStack.heightAnchor.constraint(equalTo: pageScrollView.frameLayoutGuide.heightAnchor),
         ])
 
-        // Build each page — add to hierarchy FIRST, then activate the width constraint
         for layout in layouts {
             let page = buildPageView(layout)
             page.translatesAutoresizingMaskIntoConstraints = false
@@ -96,24 +131,23 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             page.widthAnchor.constraint(equalTo: pageScrollView.frameLayoutGuide.widthAnchor).isActive = true
         }
 
-        // Bottom navigation bar: [< prev]  [● ○ ○]  [next >]
-        // Arrows and page dots live here — completely separate from content.
-        let bottomBar = UIView()
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
+        bottomBar.backgroundColor = .clear
         containerView.addSubview(bottomBar)
 
         prevArrow.translatesAutoresizingMaskIntoConstraints = false
         nextArrow.translatesAutoresizingMaskIntoConstraints = false
         prevArrow.setImage(UIImage(systemName: "chevron.left.circle.fill"), for: .normal)
         nextArrow.setImage(UIImage(systemName: "chevron.right.circle.fill"), for: .normal)
-        prevArrow.tintColor = UIColor.systemGray
-        nextArrow.tintColor = UIColor.systemGray
+        prevArrow.tintColor = .systemGray
+        nextArrow.tintColor = .systemGray
         bottomBar.addSubview(prevArrow)
         bottomBar.addSubview(nextArrow)
 
         pageControl.numberOfPages = layouts.count
-        pageControl.currentPage   = 0
-        pageControl.isHidden      = layouts.count <= 1
+        pageControl.currentPage = 0
+        pageControl.pageIndicatorTintColor = UIColor.white.withAlphaComponent(0.35)
+        pageControl.currentPageIndicatorTintColor = .white
         pageControl.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.addSubview(pageControl)
 
@@ -132,10 +166,18 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             pageControl.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
         ])
 
-        // Close button (subview of view — can float outside containerView for outside-* positions)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         closeButton.isHidden = true
+        closeButton.layer.zPosition = 1000
+        closeButton.contentHorizontalAlignment = .center
+        closeButton.contentVerticalAlignment = .center
+        closeButton.imageView?.contentMode = .scaleAspectFit
         view.addSubview(closeButton)
+
+        NSLayoutConstraint.activate([
+            closeButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 36),
+            closeButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
+        ])
 
         if isFullscreen {
             NSLayoutConstraint.activate([
@@ -147,21 +189,19 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 pageScrollView.topAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.topAnchor),
                 pageScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 pageScrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                pageScrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+                pageScrollView.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor),
 
                 bottomBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 bottomBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
                 bottomBar.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor),
-                bottomBar.heightAnchor.constraint(equalToConstant: 48),
             ])
         } else {
-            // Modal carousel: centered, 350pt wide, height derived from first layout's blocks
-            let contentH    = estimatedFirstPageHeight(for: 350)
-            let bottomBarH: CGFloat = 48
-            let topPad: CGFloat     = 8
-            let naturalH    = contentH + bottomBarH + topPad
-            let maxH        = UIScreen.main.bounds.height * 0.75
-            let containerH  = min(naturalH, maxH)
+            let contentH = estimatedFirstPageHeight(for: 350)
+            let bottomBarH: CGFloat = layouts.count > 1 ? 48 : 0
+            let topPad: CGFloat = 8
+            let naturalH = contentH + bottomBarH + topPad
+            let maxH = UIScreen.main.bounds.height * 0.75
+            let containerH = min(naturalH, maxH)
 
             NSLayoutConstraint.activate([
                 containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
@@ -177,23 +217,23 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 bottomBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 bottomBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
                 bottomBar.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-                bottomBar.heightAnchor.constraint(equalToConstant: 48),
             ])
         }
 
-        applyStyleFromFirstLayout()
-        applyCloseFromFirstLayout()
-        applyOverlayFromFirstLayout()
-        updateArrows()
+        bottomBarHeightConstraint = bottomBar.heightAnchor.constraint(equalToConstant: layouts.count > 1 ? 48 : 0)
+        bottomBarHeightConstraint?.isActive = true
+
+        applyContainerStyleFromFirstLayout()
+        updateSlideChrome()
     }
 
     // MARK: - Style / Close / Overlay
 
-    private func applyStyleFromFirstLayout() {
+    private func applyContainerStyleFromFirstLayout() {
         guard let style = layouts.first?.style else { return }
 
-        if let hex = style.bgColor, let color = UIColor(hex: hex) {
-            containerView.backgroundColor = color
+        if let bgColorHex = style.bgColor {
+            containerView.backgroundColor = UIColor(hex: bgColorHex)
         }
 
         if isFullscreen {
@@ -201,57 +241,53 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         } else {
             containerView.layer.cornerRadius = CGFloat(style.radius ?? 8)
         }
-        containerView.clipsToBounds = true
 
-        if let urlStr = style.bgImage, !urlStr.isEmpty, let url = URL(string: urlStr) {
-            let bgView = UIImageView()
-            bgView.contentMode = .scaleAspectFill
-            bgView.clipsToBounds = true
-            bgView.translatesAutoresizingMaskIntoConstraints = false
-            containerView.insertSubview(bgView, at: 0)
-            NSLayoutConstraint.activate([
-                bgView.topAnchor.constraint(equalTo: containerView.topAnchor),
-                bgView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
-                bgView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-                bgView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            ])
-            URLSession.shared.dataTask(with: url) { data, _, _ in
-                if let data = data, let img = UIImage(data: data) {
-                    DispatchQueue.main.async { bgView.image = img }
-                }
-            }.resume()
-        }
+        containerView.clipsToBounds = true
     }
 
-    private func applyCloseFromFirstLayout() {
-        guard let close = layouts.first?.close else { return }
+    private func updateSlideChrome() {
+        pageControl.currentPage = currentIndex
+        pageControl.isHidden = layouts.count <= 1
+
+        if layouts.count <= 1 {
+            bottomBarHeightConstraint?.constant = 0
+            bottomBar.isHidden = true
+        } else {
+            bottomBarHeightConstraint?.constant = 48
+            bottomBar.isHidden = false
+        }
+
+        applyOverlayForCurrentLayout()
+        applyCloseForCurrentLayout()
+        applySlideFallbackColor()
+        updateArrows()
+    }
+
+    private func applySlideFallbackColor() {
+        guard let style = currentLayout?.style,
+              let bgColorHex = style.bgColor,
+              let color = UIColor(hex: bgColorHex) else {
+            return
+        }
+        containerView.backgroundColor = color
+    }
+
+    private func applyCloseForCurrentLayout() {
+        closePositionConstraints.forEach { $0.isActive = false }
+        closePositionConstraints.removeAll()
+
+        guard let close = currentLayout?.close else {
+            closeButton.isHidden = true
+            return
+        }
 
         closeButton.isHidden = !(close.active ?? true)
 
-        if let type = close.type {
-            switch type {
-            case "icon":
-                var imgName = "xmark"
-                if close.icon?.style == "outlined" { imgName = "xmark.circle" }
-                else if close.icon?.style == "filled" { imgName = "xmark.circle.fill" }
-                closeButton.setImage(UIImage(systemName: imgName), for: .normal)
-                closeButton.tintColor = UIColor(hex: close.icon?.color ?? "") ?? .black
-            case "text":
-                let label = close.text?.label?[defaultLang] ?? close.text?.label?.values.first ?? "X"
-                closeButton.setTitle(label, for: .normal)
-            default:
-                break
-            }
-        }
-
-        // For fullscreen use safeArea; for modal, containerView.topAnchor is safe.
-        let topAnchor: NSLayoutYAxisAnchor = isFullscreen
+        let needsSafeTop = isFullscreen
+        let safeTopAnchor: NSLayoutYAxisAnchor = needsSafeTop
             ? view.safeAreaLayoutGuide.topAnchor
             : containerView.topAnchor
 
-        // "outside-*" positions are only safe when there is room beside the container.
-        // For modal carousel (350pt on ~393pt screen) they would overflow, so treat
-        // them as "right"/"left" inside the container.
         let position = close.position ?? "right"
         let resolvedPosition: String
         if !isFullscreen && (position == "outside-left" || position == "outside-right") {
@@ -262,62 +298,160 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
 
         switch resolvedPosition {
         case "left":
-            NSLayoutConstraint.activate([
-                closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-                closeButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
-            ])
+            closePositionConstraints = [
+                closeButton.topAnchor.constraint(equalTo: safeTopAnchor, constant: 8),
+                closeButton.leftAnchor.constraint(equalTo: containerView.leftAnchor, constant: 8),
+            ]
+
         case "outside-left":
-            NSLayoutConstraint.activate([
-                closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-                closeButton.trailingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12),
-            ])
+            closePositionConstraints = [
+                closeButton.topAnchor.constraint(
+                    equalTo: needsSafeTop ? view.safeAreaLayoutGuide.topAnchor : containerView.topAnchor,
+                    constant: needsSafeTop ? 8 : -28
+                ),
+                closeButton.rightAnchor.constraint(equalTo: containerView.leftAnchor, constant: 12),
+            ]
+
         case "outside-right":
-            NSLayoutConstraint.activate([
-                closeButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-                closeButton.leadingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12),
-            ])
-        default: // "right"
-            NSLayoutConstraint.activate([
-                closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-                closeButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
-            ])
+            closePositionConstraints = [
+                closeButton.topAnchor.constraint(
+                    equalTo: needsSafeTop ? view.safeAreaLayoutGuide.topAnchor : containerView.topAnchor,
+                    constant: needsSafeTop ? 8 : -28
+                ),
+                closeButton.leftAnchor.constraint(equalTo: containerView.rightAnchor, constant: -12),
+            ]
+
+        default:
+            closePositionConstraints = [
+                closeButton.topAnchor.constraint(equalTo: safeTopAnchor, constant: 8),
+                closeButton.rightAnchor.constraint(equalTo: containerView.rightAnchor, constant: -8),
+            ]
+        }
+
+        NSLayoutConstraint.activate(closePositionConstraints)
+
+        switch close.type ?? "icon" {
+        case "text":
+            applyCloseText(close.text)
+        default:
+            applyCloseIcon(close.icon)
         }
     }
 
-    private func applyOverlayFromFirstLayout() {
-        guard let extra = layouts.first?.extra else { return }
+    private func applyCloseIcon(_ icon: CustomInAppPayload.Layout.Close.Icon?) {
+        closeButton.setTitle(nil, for: .normal)
+        closeButton.backgroundColor = UIColor.black.withAlphaComponent(0.35)
+        closeButton.layer.cornerRadius = 18
+        closeButton.layer.masksToBounds = true
+        closeButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
 
-        if let hex = extra.overlay?.color, let color = UIColor(hex: hex) {
+        var systemImageName = "xmark"
+        if icon?.style == "outlined" {
+            systemImageName = "xmark.circle"
+        } else if icon?.style == "filled" {
+            systemImageName = "xmark.circle.fill"
+        }
+
+        closeButton.setImage(UIImage(systemName: systemImageName), for: .normal)
+        closeButton.setPreferredSymbolConfiguration(
+            UIImage.SymbolConfiguration(pointSize: 18, weight: .bold),
+            forImageIn: .normal
+        )
+
+        if let hex = icon?.color, let color = UIColor(hex: hex) {
+            closeButton.tintColor = color
+        } else {
+            closeButton.tintColor = .black
+        }
+    }
+
+    private func applyCloseText(_ textData: CustomInAppPayload.Layout.Close.CloseText?) {
+        closeButton.setImage(nil, for: .normal)
+        closeButton.backgroundColor = .clear
+        closeButton.layer.cornerRadius = 0
+        closeButton.layer.masksToBounds = false
+        closeButton.contentEdgeInsets = .zero
+
+        var title = textData?.label?[defaultLang]
+        if let dict = textData?.label {
+            title = dict[defaultLang] ?? dict["en"] ?? "Close"
+        }
+        closeButton.setTitle(title, for: .normal)
+
+        if let colorHex = textData?.color, let color = UIColor(hex: colorHex) {
+            closeButton.setTitleColor(color, for: .normal)
+        }
+
+        if let fontSize = textData?.fontSize {
+            closeButton.titleLabel?.font = UIFont.systemFont(ofSize: CGFloat(fontSize))
+        }
+    }
+
+    private func applyOverlayForCurrentLayout() {
+        overlayView.gestureRecognizers?.forEach { overlayView.removeGestureRecognizer($0) }
+        overlayView.isUserInteractionEnabled = false
+        overlayView.backgroundColor = .clear
+
+        guard let extra = currentLayout?.extra else { return }
+
+        if let overlayColorHex = extra.overlay?.color,
+           let color = UIColor(hex: overlayColorHex) {
             overlayView.backgroundColor = color.withAlphaComponent(0.5)
         }
+
         if extra.overlay?.action == "close" {
             overlayView.isUserInteractionEnabled = true
-            overlayView.addGestureRecognizer(
-                UITapGestureRecognizer(target: self, action: #selector(didTapClose))
-            )
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(didTapClose))
+            overlayView.addGestureRecognizer(tapGesture)
+        }
+    }
+
+    private func applyTransition() {
+        guard let transitionType = currentLayout?.extra?.transition ?? layouts.first?.extra?.transition else {
+            return
+        }
+
+        switch transitionType {
+        case "right-to-left":
+            containerView.transform = CGAffineTransform(translationX: view.bounds.width, y: 0)
+        case "left-to-right":
+            containerView.transform = CGAffineTransform(translationX: -view.bounds.width, y: 0)
+        case "top-to-bottom":
+            containerView.transform = CGAffineTransform(translationX: 0, y: -view.bounds.height)
+        case "bottom-to-top":
+            containerView.transform = CGAffineTransform(translationX: 0, y: view.bounds.height)
+        case "no-transition":
+            containerView.transform = .identity
+            return
+        default:
+            containerView.transform = .identity
+            return
+        }
+
+        UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseInOut) {
+            self.containerView.transform = .identity
         }
     }
 
     // MARK: - Dynamic height estimation
 
-    /// Computes the approximate pixel height of the first layout's block stack
-    /// for a given container width. Used to size the modal height dynamically.
     private func estimatedFirstPageHeight(for width: CGFloat) -> CGFloat {
         guard let layout = layouts.first, let blocks = layout.blocks?.order else { return 350 }
 
-        var height: CGFloat = 8 // top padding
+        var height: CGFloat = 8
         for block in blocks {
             switch block {
-            case .image(let ib):
-                let margin = CGFloat(ib.margin ?? 0) * 2
-                height += 150 + margin
+            case .image:
+                let modalHeight = UIScreen.main.bounds.height * modalHeightRatio
+                let imageHeight = max(modalHeight * modalImageHeightRatio, modalImageMinHeight)
+                height += imageHeight
 
             case .text(let tb):
-                let text  = tb.content?[defaultLang] ?? tb.content?.values.first ?? ""
-                let size  = CGFloat(Double(tb.fontSize ?? "14") ?? 14)
-                let hm    = CGFloat(tb.horizontalMargin ?? 0)
-                let tw    = width - (hm > 0 ? hm * 2 : 32)
-                let rect  = (text as NSString).boundingRect(
+                let text = tb.content?[defaultLang] ?? tb.content?.values.first ?? ""
+                let size = CGFloat(Double(tb.fontSize ?? "14") ?? 14)
+                let hm = CGFloat(tb.horizontalMargin ?? 0)
+                let tw = width - (hm > 0 ? (hm + extraHorizontalInset) * 2 : contentHorizontalInset * 2)
+                let rect = (text as NSString).boundingRect(
                     with: CGSize(width: tw, height: .greatestFiniteMagnitude),
                     options: .usesLineFragmentOrigin,
                     attributes: [.font: UIFont.systemFont(ofSize: size)],
@@ -329,67 +463,147 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 height += CGFloat(sb.verticalSpacing ?? 8)
 
             case .button(let bb):
-                let m: CGFloat = CGFloat(bb.margin ?? 8)
-                let h: CGFloat = bb.verticalSize == "small" ? 32 : bb.verticalSize == "large" ? 56 : 44
-                height += h + m * 2
+                let margin = CGFloat(bb.margin ?? 8)
+                let blockHeight: CGFloat
+                switch bb.verticalSize {
+                case "small": blockHeight = 32
+                case "large": blockHeight = 56
+                default: blockHeight = 44
+                }
+                height += blockHeight + margin * 2
 
             case .buttonGroup(let bg):
-                let isH   = bg.buttonGroupType == "double-horizontal"
+                let isHorizontal = bg.buttonGroupType == "double-horizontal"
                 let count = CGFloat(bg.buttons?.count ?? 1)
-                let rows: CGFloat = isH ? 1 : count
+                let rows: CGFloat = isHorizontal ? 1 : count
                 height += rows * 44 + 16
 
             case .unknown:
                 break
             }
         }
-        height += 8 // bottom padding
+
+        height += 8
         return height
     }
 
     // MARK: - Page building
 
     private func buildPageView(_ layout: CustomInAppPayload.Layout) -> UIView {
-        let scrollView = UIScrollView()
-        scrollView.showsVerticalScrollIndicator   = false
-        scrollView.showsHorizontalScrollIndicator = false
-        // Apply per-slide background color
-        if let hex = layout.style?.bgColor, let color = UIColor(hex: hex) {
-            scrollView.backgroundColor = color
+        let pageView = UIView()
+        pageView.clipsToBounds = true
+
+        applyPageBackground(on: pageView, style: layout.style)
+
+        let contentScrollView = UIScrollView()
+        contentScrollView.translatesAutoresizingMaskIntoConstraints = false
+        contentScrollView.showsVerticalScrollIndicator = false
+        contentScrollView.showsHorizontalScrollIndicator = false
+        contentScrollView.backgroundColor = .clear
+
+        if isFullscreen && layouts.count > 1 {
+            contentScrollView.contentInset.bottom = 56
+            contentScrollView.verticalScrollIndicatorInsets.bottom = 56
         }
 
-        let stack = UIStackView()
-        stack.axis         = .vertical
-        stack.spacing      = 0
-        stack.alignment    = .fill
-        stack.distribution = .equalSpacing
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.addSubview(stack)
+        pageView.addSubview(contentScrollView)
+
+        let contentStackView = UIStackView()
+        contentStackView.axis = .vertical
+        contentStackView.spacing = 0
+        contentStackView.alignment = .fill
+        contentStackView.distribution = .equalSpacing
+        contentStackView.translatesAutoresizingMaskIntoConstraints = false
+        contentScrollView.addSubview(contentStackView)
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            stack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+            contentScrollView.topAnchor.constraint(equalTo: pageView.topAnchor),
+            contentScrollView.leadingAnchor.constraint(equalTo: pageView.leadingAnchor),
+            contentScrollView.trailingAnchor.constraint(equalTo: pageView.trailingAnchor),
+            contentScrollView.bottomAnchor.constraint(equalTo: pageView.bottomAnchor),
+
+            contentStackView.topAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.topAnchor),
+            contentStackView.leadingAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.leadingAnchor),
+            contentStackView.trailingAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.trailingAnchor),
+            contentStackView.bottomAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.bottomAnchor),
+            contentStackView.widthAnchor.constraint(equalTo: contentScrollView.frameLayoutGuide.widthAnchor),
         ])
 
-        if let blocks = layout.blocks?.order {
-            for block in blocks {
+        if let orderArray = layout.blocks?.order {
+            for block in orderArray {
                 var blockView: UIView?
                 switch block {
-                case .text(let tb):        blockView = renderTextBlock(tb)
-                case .image(let ib):       blockView = renderImageBlock(ib)
-                case .spacer(let sb):      blockView = renderSpacerBlock(sb)
-                case .button(let bb):      blockView = renderButtonBlock(bb)
-                case .buttonGroup(let bg): blockView = renderButtonGroupBlock(bg)
-                case .unknown:             continue
+                case .text(let tb):
+                    blockView = renderTextBlock(tb)
+                case .image(let ib):
+                    blockView = renderImageBlock(ib)
+                case .spacer(let sb):
+                    blockView = renderSpacerBlock(sb)
+                case .button(let bb):
+                    blockView = renderButtonBlock(bb)
+                case .buttonGroup(let bg):
+                    blockView = renderButtonGroupBlock(bg)
+                case .unknown:
+                    continue
                 }
-                if let v = blockView { stack.addArrangedSubview(v) }
+
+                if let view = blockView {
+                    contentStackView.addArrangedSubview(view)
+                }
             }
         }
 
-        return scrollView
+        return pageView
+    }
+
+    private func applyPageBackground(on pageView: UIView, style: CustomInAppPayload.Layout.Style?) {
+        if let bgColorHex = style?.bgColor,
+           let color = UIColor(hex: bgColorHex) {
+            pageView.backgroundColor = color
+        }
+
+        guard let bgImageURL = style?.bgImage, !bgImageURL.isEmpty else {
+            return
+        }
+
+        let bgImageView = UIImageView()
+        bgImageView.translatesAutoresizingMaskIntoConstraints = false
+        bgImageView.contentMode = .scaleAspectFill
+        bgImageView.clipsToBounds = true
+
+        pageView.insertSubview(bgImageView, at: 0)
+
+        NSLayoutConstraint.activate([
+            bgImageView.topAnchor.constraint(equalTo: pageView.topAnchor),
+            bgImageView.leadingAnchor.constraint(equalTo: pageView.leadingAnchor),
+            bgImageView.trailingAnchor.constraint(equalTo: pageView.trailingAnchor),
+            bgImageView.bottomAnchor.constraint(equalTo: pageView.bottomAnchor),
+        ])
+
+        if let url = URL(string: bgImageURL) {
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                if let data = data, let image = UIImage(data: data) {
+                    DispatchQueue.main.async {
+                        bgImageView.image = image
+                    }
+                }
+            }.resume()
+        }
+
+        if style?.bgImageMask == true,
+           let maskColorHex = style?.bgImageColor {
+            let maskView = UIView()
+            maskView.translatesAutoresizingMaskIntoConstraints = false
+            maskView.backgroundColor = UIColor(hex: maskColorHex)?.withAlphaComponent(0.5)
+            bgImageView.addSubview(maskView)
+
+            NSLayoutConstraint.activate([
+                maskView.topAnchor.constraint(equalTo: bgImageView.topAnchor),
+                maskView.leadingAnchor.constraint(equalTo: bgImageView.leadingAnchor),
+                maskView.trailingAnchor.constraint(equalTo: bgImageView.trailingAnchor),
+                maskView.bottomAnchor.constraint(equalTo: bgImageView.bottomAnchor),
+            ])
+        }
     }
 
     // MARK: - Navigation
@@ -409,16 +623,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
     private func scrollToCurrentIndex(animated: Bool) {
         let offset = CGPoint(x: pageScrollView.bounds.width * CGFloat(currentIndex), y: 0)
         pageScrollView.setContentOffset(offset, animated: animated)
-        pageControl.currentPage = currentIndex
-        updateArrows()
-        applySlideBackground(for: currentIndex)
-    }
-
-    private func applySlideBackground(for index: Int) {
-        guard index < layouts.count,
-              let hex = layouts[index].style?.bgColor,
-              let color = UIColor(hex: hex) else { return }
-        containerView.backgroundColor = color
+        updateSlideChrome()
     }
 
     private func updateArrows() {
@@ -428,10 +633,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             return
         }
 
-        let arrowsEnabled = layouts.indices.contains(currentIndex)
-            ? (layouts[currentIndex].style?.navigationalArrows == true)
-            : false
-
+        let arrowsEnabled = currentLayout?.style?.navigationalArrows == true
         guard arrowsEnabled else {
             prevArrow.isHidden = true
             nextArrow.isHidden = true
@@ -442,17 +644,40 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         nextArrow.isHidden = currentIndex == layouts.count - 1
     }
 
-    // UIScrollViewDelegate
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         guard scrollView === pageScrollView, pageScrollView.bounds.width > 0 else { return }
-        currentIndex = Int(round(scrollView.contentOffset.x / scrollView.bounds.width))
-        pageControl.currentPage = currentIndex
-        updateArrows()
-        applySlideBackground(for: currentIndex)
+        currentIndex = max(0, min(layouts.count - 1, Int(round(scrollView.contentOffset.x / pageScrollView.bounds.width))))
+        updateSlideChrome()
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard scrollView === pageScrollView, pageScrollView.bounds.width > 0 else { return }
+        currentIndex = max(0, min(layouts.count - 1, Int(round(scrollView.contentOffset.x / pageScrollView.bounds.width))))
+        updateSlideChrome()
     }
 
     @objc private func didTapClose() {
-        dismiss(animated: true)
+        guard let transitionType = currentLayout?.extra?.transition ?? layouts.first?.extra?.transition else {
+            dismiss(animated: true)
+            return
+        }
+
+        UIView.animate(withDuration: 0.3, animations: {
+            switch transitionType {
+            case "right-to-left":
+                self.containerView.transform = CGAffineTransform(translationX: self.view.bounds.width, y: 0)
+            case "left-to-right":
+                self.containerView.transform = CGAffineTransform(translationX: -self.view.bounds.width, y: 0)
+            case "top-to-bottom":
+                self.containerView.transform = CGAffineTransform(translationX: 0, y: -self.view.bounds.height)
+            case "bottom-to-top":
+                self.containerView.transform = CGAffineTransform(translationX: 0, y: self.view.bounds.height)
+            default:
+                self.containerView.transform = .identity
+            }
+        }, completion: { _ in
+            self.dismiss(animated: false)
+        })
     }
 
     // MARK: - Block Rendering
@@ -464,64 +689,134 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         label.lineBreakMode = .byWordWrapping
 
         let font = makeFont(family: block.fontFamily, weight: block.fontWeight, size: block.fontSize)
-        label.font = (block.italic == true) ? UIFont.italicSystemFont(ofSize: font.pointSize) : font
+        if block.italic == true {
+            label.font = UIFont.italicSystemFont(ofSize: font.pointSize)
+        } else {
+            label.font = font
+        }
 
         if block.underscore == true {
-            label.attributedText = NSAttributedString(string: label.text ?? "", attributes: [
+            let text = label.text ?? ""
+            label.attributedText = NSAttributedString(string: text, attributes: [
                 .underlineStyle: NSUnderlineStyle.single.rawValue,
                 .font: label.font as Any,
-                .foregroundColor: UIColor(hex: block.color ?? "#000000") ?? UIColor.black,
+                .foregroundColor: UIColor(hex: block.color ?? "#000000") ?? .black,
             ])
-        } else if let hex = block.color, let color = UIColor(hex: hex) {
+        } else if let colorHex = block.color, let color = UIColor(hex: colorHex) {
             label.textColor = color
         }
 
         switch block.textAlignment {
-        case "center": label.textAlignment = .center
-        case "right":  label.textAlignment = .right
-        default:       label.textAlignment = .left
+        case "center":
+            label.textAlignment = .center
+        case "right":
+            label.textAlignment = .right
+        default:
+            label.textAlignment = .left
         }
 
-        let leading = CGFloat(block.horizontalMargin ?? 0) > 0
-            ? CGFloat(block.horizontalMargin!) : 16
+        let margin = CGFloat(block.horizontalMargin ?? 0)
+        if margin > 0 {
+            let adjustedMargin = margin + extraHorizontalInset
+            let wrapper = UIView()
+            label.translatesAutoresizingMaskIntoConstraints = false
+            wrapper.addSubview(label)
+
+            NSLayoutConstraint.activate([
+                label.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 4),
+                label.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -4),
+                label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: adjustedMargin),
+                label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -adjustedMargin),
+            ])
+
+            if let action = block.action, !action.isEmpty {
+                let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
+                wrapper.isUserInteractionEnabled = true
+                wrapper.accessibilityIdentifier = action
+                wrapper.addGestureRecognizer(tap)
+            }
+
+            return wrapper
+        }
 
         let wrapper = UIView()
         label.translatesAutoresizingMaskIntoConstraints = false
         wrapper.addSubview(label)
+
         NSLayoutConstraint.activate([
             label.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 4),
             label.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -4),
-            label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: leading),
-            label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -leading),
+            label.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: contentHorizontalInset),
+            label.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -contentHorizontalInset),
         ])
+
+        if let action = block.action, !action.isEmpty {
+            let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
+            wrapper.isUserInteractionEnabled = true
+            wrapper.accessibilityIdentifier = action
+            wrapper.addGestureRecognizer(tap)
+        }
+
         return wrapper
     }
 
     private func renderImageBlock(_ block: CustomInAppPayload.Layout.Blocks.ImageBlock) -> UIView {
         let imageView = UIImageView()
-        imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
-        if let r = block.radius { imageView.layer.cornerRadius = CGFloat(r) }
-        imageView.heightAnchor.constraint(equalToConstant: 150).isActive = true
 
-        if let urlStr = block.url, let url = URL(string: urlStr) {
+        let modalHeight = UIScreen.main.bounds.height * modalHeightRatio
+        let imageHeight = max(modalHeight * modalImageHeightRatio, modalImageMinHeight)
+        let heightConstraint = imageView.heightAnchor.constraint(equalToConstant: imageHeight)
+        heightConstraint.priority = .required
+        heightConstraint.isActive = true
+
+        if let urlString = block.url, let url = URL(string: urlString) {
             URLSession.shared.dataTask(with: url) { data, _, _ in
-                if let data = data, let img = UIImage(data: data) {
-                    DispatchQueue.main.async { imageView.image = img }
+                if let data = data, let image = UIImage(data: data) {
+                    DispatchQueue.main.async {
+                        imageView.image = image
+                    }
                 }
             }.resume()
         }
 
-        let margin = CGFloat(block.margin ?? 0)
+        let rawMargin = CGFloat(block.margin ?? 0)
+        let horizontalMarginBase: CGFloat = (isFullscreen && rawMargin <= 0) ? baseHorizontalInset : rawMargin
+        let horizontalMargin: CGFloat = horizontalMarginBase + extraHorizontalInset
+
         let wrapper = UIView()
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        wrapper.addSubview(imageView)
+        let frameView = UIView()
+        frameView.translatesAutoresizingMaskIntoConstraints = false
+        frameView.clipsToBounds = true
+
+        if let radius = block.radius {
+            frameView.layer.cornerRadius = CGFloat(radius)
+        }
+
+        wrapper.addSubview(frameView)
+        frameView.addSubview(imageView)
+
         NSLayoutConstraint.activate([
-            imageView.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: margin),
-            imageView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -margin),
-            imageView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: margin),
-            imageView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -margin),
+            frameView.topAnchor.constraint(equalTo: wrapper.topAnchor),
+            frameView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+            frameView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: horizontalMargin),
+            frameView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -horizontalMargin),
+
+            imageView.topAnchor.constraint(equalTo: frameView.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: frameView.bottomAnchor),
+            imageView.leadingAnchor.constraint(equalTo: frameView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: frameView.trailingAnchor),
         ])
+
+        if let link = block.link, !link.isEmpty {
+            let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
+            wrapper.isUserInteractionEnabled = true
+            wrapper.accessibilityIdentifier = link
+            wrapper.addGestureRecognizer(tap)
+        }
+
         return wrapper
     }
 
@@ -532,114 +827,188 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         return spacer
     }
 
-    private func renderButtonBlock(
-        _ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock.ButtonBlock
-    ) -> UIView {
+    private func renderButtonBlock(_ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock.ButtonBlock) -> UIView {
         let button = createStyledButton(block)
-        let margin: CGFloat = CGFloat(block.margin ?? 8)
-        let height: CGFloat = block.verticalSize == "small" ? 32 : block.verticalSize == "large" ? 56 : 44
+        let margin = CGFloat(block.margin ?? 8)
 
         let wrapper = UIView()
         button.translatesAutoresizingMaskIntoConstraints = false
         wrapper.addSubview(button)
 
-        var constraints: [NSLayoutConstraint] = [
+        let heightValue: CGFloat
+        switch block.verticalSize {
+        case "small": heightValue = 32
+        case "large": heightValue = 56
+        default: heightValue = 44
+        }
+
+        var constraints = [
             button.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: margin),
             button.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -margin),
-            button.heightAnchor.constraint(equalToConstant: height),
+            button.heightAnchor.constraint(equalToConstant: heightValue),
         ]
 
         let hSize = (block.horizontalSize ?? "").isEmpty ? "auto" : block.horizontalSize!
-        if hSize == "full" {
-            constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
-            constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
+        let normalizedHSize: String
+        switch hSize {
+        case "large":
+            normalizedHSize = "full"
+        default:
+            normalizedHSize = hSize
+        }
+
+        if normalizedHSize == "full" {
+            constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: contentHorizontalInset))
+            constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -contentHorizontalInset))
         } else {
-            if hSize == "half" {
+            if normalizedHSize == "half" {
                 constraints.append(button.widthAnchor.constraint(equalTo: wrapper.widthAnchor, multiplier: 0.5))
             } else {
-                constraints.append(button.leadingAnchor.constraint(greaterThanOrEqualTo: wrapper.leadingAnchor, constant: 16))
-                constraints.append(button.trailingAnchor.constraint(lessThanOrEqualTo: wrapper.trailingAnchor, constant: -16))
+                constraints.append(button.leadingAnchor.constraint(greaterThanOrEqualTo: wrapper.leadingAnchor, constant: contentHorizontalInset))
+                constraints.append(button.trailingAnchor.constraint(lessThanOrEqualTo: wrapper.trailingAnchor, constant: -contentHorizontalInset))
                 button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 24, bottom: 8, right: 24)
             }
+
             switch block.buttonPosition {
             case "left":
-                constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16))
+                constraints.append(button.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: contentHorizontalInset))
             case "right":
-                constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16))
+                constraints.append(button.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -contentHorizontalInset))
             default:
                 constraints.append(button.centerXAnchor.constraint(equalTo: wrapper.centerXAnchor))
             }
         }
+
         NSLayoutConstraint.activate(constraints)
         return wrapper
     }
 
-    private func renderButtonGroupBlock(
-        _ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock
-    ) -> UIView {
+    private func renderButtonGroupBlock(_ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock) -> UIView {
         guard let buttons = block.buttons, !buttons.isEmpty else { return UIView() }
 
         let isHorizontal = block.buttonGroupType == "double-horizontal"
-        let stack = UIStackView()
-        stack.axis         = isHorizontal ? .horizontal : .vertical
-        stack.spacing      = 8
-        stack.alignment    = .fill
-        stack.distribution = isHorizontal ? .fillEqually : .fill
 
-        for btnData in buttons {
-            let btn = createStyledButton(btnData)
-            let h: CGFloat = btnData.verticalSize == "small" ? 32 : btnData.verticalSize == "large" ? 56 : 44
-            btn.heightAnchor.constraint(equalToConstant: h).isActive = true
-            stack.addArrangedSubview(btn)
+        if !isHorizontal {
+            let wrapper = UIView()
+            let stack = UIStackView()
+            stack.axis = .vertical
+            stack.spacing = 0
+            stack.alignment = .fill
+            stack.distribution = .fill
+            stack.translatesAutoresizingMaskIntoConstraints = false
+
+            for buttonData in buttons {
+                let buttonWrapper = renderButtonBlock(buttonData)
+                stack.addArrangedSubview(buttonWrapper)
+            }
+
+            wrapper.addSubview(stack)
+            NSLayoutConstraint.activate([
+                stack.topAnchor.constraint(equalTo: wrapper.topAnchor),
+                stack.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+                stack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+                stack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+            ])
+
+            return wrapper
+        }
+
+        let stack = UIStackView()
+        stack.axis = .horizontal
+        stack.spacing = 8
+        stack.alignment = .fill
+        stack.distribution = .fillEqually
+
+        for buttonData in buttons {
+            let button = createStyledButton(buttonData)
+            let heightValue: CGFloat
+            switch buttonData.verticalSize {
+            case "small": heightValue = 32
+            case "large": heightValue = 56
+            default: heightValue = 44
+            }
+            button.heightAnchor.constraint(equalToConstant: heightValue).isActive = true
+            stack.addArrangedSubview(button)
         }
 
         let wrapper = UIView()
         stack.translatesAutoresizingMaskIntoConstraints = false
         wrapper.addSubview(stack)
+
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: 8),
             stack.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor, constant: -8),
-            stack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -16),
+            stack.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor, constant: contentHorizontalInset),
+            stack.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor, constant: -contentHorizontalInset),
         ])
+
         return wrapper
     }
 
-    private func createStyledButton(
-        _ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock.ButtonBlock
-    ) -> UIButton {
+    private func createStyledButton(_ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock.ButtonBlock) -> UIButton {
         let button = UIButton(type: .system)
-        button.setTitle(block.label?[defaultLang] ?? block.label?.values.first ?? "", for: .normal)
-        button.titleLabel?.font = makeFont(family: block.fontFamily, weight: block.fontWeight, size: block.fontSize)
+        let title = block.label?[defaultLang] ?? block.label?.values.first ?? ""
+        button.setTitle(title, for: .normal)
 
-        if let hex = block.textColor, let c = UIColor(hex: hex) {
-            button.setTitleColor(c, for: .normal)
+        let font = makeFont(family: block.fontFamily, weight: block.fontWeight, size: block.fontSize)
+        button.titleLabel?.font = font
+
+        if let hex = block.textColor, let color = UIColor(hex: hex) {
+            button.setTitleColor(color, for: .normal)
         } else {
             button.setTitleColor(.white, for: .normal)
         }
-        if let hex = block.backgroundColor, let c = UIColor(hex: hex) { button.backgroundColor = c }
-        if let hex = block.borderColor, let c = UIColor(hex: hex) {
-            button.layer.borderColor = c.cgColor
+
+        if let hex = block.backgroundColor, let color = UIColor(hex: hex) {
+            button.backgroundColor = color
+        }
+
+        if let hex = block.borderColor, let color = UIColor(hex: hex) {
+            button.layer.borderColor = color.cgColor
             button.layer.borderWidth = 1
         }
+
         button.layer.cornerRadius = CGFloat(block.borderRadius ?? 8)
         button.clipsToBounds = true
-        button.accessibilityIdentifier = block.action ?? ""
+
+        let action = block.action ?? ""
+        button.accessibilityIdentifier = action
         button.addTarget(self, action: #selector(handleButtonTap(_:)), for: .touchUpInside)
+
         return button
     }
 
     private func makeFont(family: String?, weight: String?, size: String?) -> UIFont {
-        let sz: CGFloat = CGFloat(Double(size ?? "16") ?? 16)
-        let w: UIFont.Weight = weight == "bold" ? .bold : .regular
-        if family == "monospace" { return .monospacedSystemFont(ofSize: sz, weight: w) }
-        return .systemFont(ofSize: sz, weight: w)
+        let fontSize = CGFloat(Double(size ?? "16") ?? 16)
+        let fontWeight: UIFont.Weight = weight == "bold" ? .bold : .regular
+
+        switch family {
+        case "monospace":
+            return .monospacedSystemFont(ofSize: fontSize, weight: fontWeight)
+        default:
+            return .systemFont(ofSize: fontSize, weight: fontWeight)
+        }
     }
 
     @objc private func handleButtonTap(_ sender: UIButton) {
         let action = sender.accessibilityIdentifier ?? ""
-        if action.isEmpty || action == "close" { didTapClose(); return }
-        if let url = URL(string: action) { UIApplication.shared.open(url) }
+        handleBlockAction(action)
+    }
+
+    @objc private func handleTapAction(_ gesture: UITapGestureRecognizer) {
+        let action = gesture.view?.accessibilityIdentifier ?? ""
+        handleBlockAction(action)
+    }
+
+    private func handleBlockAction(_ action: String) {
+        if action.isEmpty || action == "close" {
+            didTapClose()
+            return
+        }
+
+        if let url = URL(string: action) {
+            UIApplication.shared.open(url)
+        }
         didTapClose()
     }
 }
