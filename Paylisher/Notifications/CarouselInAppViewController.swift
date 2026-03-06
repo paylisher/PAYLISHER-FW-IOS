@@ -206,10 +206,10 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
                 containerView.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: modalHeightRatio),
 
-                pageScrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16),
+                pageScrollView.topAnchor.constraint(equalTo: containerView.topAnchor),
                 pageScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 pageScrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                pageScrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16),
+                pageScrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
 
                 bottomBar.topAnchor.constraint(equalTo: containerView.bottomAnchor, constant: 8),
                 bottomBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
@@ -443,13 +443,22 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         contentContainer.backgroundColor = .clear
         pageView.addSubview(contentContainer)
 
-        let bottomOffset = -fullscreenBottomChromeHeight
-        NSLayoutConstraint.activate([
-            contentContainer.topAnchor.constraint(equalTo: pageView.safeAreaLayoutGuide.topAnchor),
-            contentContainer.leadingAnchor.constraint(equalTo: pageView.leadingAnchor),
-            contentContainer.trailingAnchor.constraint(equalTo: pageView.trailingAnchor),
-            contentContainer.bottomAnchor.constraint(equalTo: pageView.safeAreaLayoutGuide.bottomAnchor, constant: bottomOffset),
-        ])
+        if isFullscreen {
+            let bottomOffset = -fullscreenBottomChromeHeight
+            NSLayoutConstraint.activate([
+                contentContainer.topAnchor.constraint(equalTo: pageView.safeAreaLayoutGuide.topAnchor),
+                contentContainer.leadingAnchor.constraint(equalTo: pageView.leadingAnchor),
+                contentContainer.trailingAnchor.constraint(equalTo: pageView.trailingAnchor),
+                contentContainer.bottomAnchor.constraint(equalTo: pageView.safeAreaLayoutGuide.bottomAnchor, constant: bottomOffset),
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                contentContainer.topAnchor.constraint(equalTo: pageView.topAnchor, constant: 16),
+                contentContainer.leadingAnchor.constraint(equalTo: pageView.leadingAnchor),
+                contentContainer.trailingAnchor.constraint(equalTo: pageView.trailingAnchor),
+                contentContainer.bottomAnchor.constraint(equalTo: pageView.bottomAnchor, constant: -16),
+            ])
+        }
 
         let contentScrollView = UIScrollView()
         contentScrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -468,25 +477,40 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         contentStackView.distribution = .fill
         contentStackView.translatesAutoresizingMaskIntoConstraints = false
 
-        let topSpacer = UIView()
-        topSpacer.translatesAutoresizingMaskIntoConstraints = false
-        topSpacer.backgroundColor = .clear
-        topSpacer.setContentHuggingPriority(.defaultLow, for: .vertical)
-        topSpacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        let hasFlexibleSpacerBlock = layout.blocks?.order?.contains(where: { block in
+            if case .spacer(let spacerBlock) = block {
+                return spacerBlock.fillAvailableSpacing == true
+            }
+            return false
+        }) ?? false
 
-        let bottomSpacer = UIView()
-        bottomSpacer.translatesAutoresizingMaskIntoConstraints = false
-        bottomSpacer.backgroundColor = .clear
-        bottomSpacer.setContentHuggingPriority(.defaultLow, for: .vertical)
-        bottomSpacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        let rootContentStack: UIStackView
+        if hasFlexibleSpacerBlock {
+            rootContentStack = contentStackView
+        } else {
+            let topSpacer = UIView()
+            topSpacer.translatesAutoresizingMaskIntoConstraints = false
+            topSpacer.backgroundColor = .clear
+            topSpacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+            topSpacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 
-        let layoutStack = UIStackView(arrangedSubviews: [topSpacer, contentStackView, bottomSpacer])
-        layoutStack.axis = .vertical
-        layoutStack.spacing = 0
-        layoutStack.alignment = .fill
-        layoutStack.distribution = .fill
-        layoutStack.translatesAutoresizingMaskIntoConstraints = false
-        contentScrollView.addSubview(layoutStack)
+            let bottomSpacer = UIView()
+            bottomSpacer.translatesAutoresizingMaskIntoConstraints = false
+            bottomSpacer.backgroundColor = .clear
+            bottomSpacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+            bottomSpacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+
+            let layoutStack = UIStackView(arrangedSubviews: [topSpacer, contentStackView, bottomSpacer])
+            layoutStack.axis = .vertical
+            layoutStack.spacing = 0
+            layoutStack.alignment = .fill
+            layoutStack.distribution = .fill
+            layoutStack.translatesAutoresizingMaskIntoConstraints = false
+            applyContentAlignment(layout.blocks?.align, topSpacer: topSpacer, bottomSpacer: bottomSpacer)
+            rootContentStack = layoutStack
+        }
+
+        contentScrollView.addSubview(rootContentStack)
 
         NSLayoutConstraint.activate([
             contentScrollView.topAnchor.constraint(equalTo: contentContainer.topAnchor),
@@ -494,15 +518,13 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             contentScrollView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             contentScrollView.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
 
-            layoutStack.topAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.topAnchor),
-            layoutStack.leadingAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.leadingAnchor),
-            layoutStack.trailingAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.trailingAnchor),
-            layoutStack.bottomAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.bottomAnchor),
-            layoutStack.widthAnchor.constraint(equalTo: contentScrollView.frameLayoutGuide.widthAnchor),
-            layoutStack.heightAnchor.constraint(greaterThanOrEqualTo: contentScrollView.frameLayoutGuide.heightAnchor),
+            rootContentStack.topAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.topAnchor),
+            rootContentStack.leadingAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.leadingAnchor),
+            rootContentStack.trailingAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.trailingAnchor),
+            rootContentStack.bottomAnchor.constraint(equalTo: contentScrollView.contentLayoutGuide.bottomAnchor),
+            rootContentStack.widthAnchor.constraint(equalTo: contentScrollView.frameLayoutGuide.widthAnchor),
+            rootContentStack.heightAnchor.constraint(greaterThanOrEqualTo: contentScrollView.frameLayoutGuide.heightAnchor),
         ])
-
-        applyContentAlignment(layout.blocks?.align, topSpacer: topSpacer, bottomSpacer: bottomSpacer)
 
         if let orderArray = layout.blocks?.order {
             for block in orderArray {
