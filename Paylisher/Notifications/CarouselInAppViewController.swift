@@ -526,6 +526,8 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             rootContentStack.heightAnchor.constraint(greaterThanOrEqualTo: contentScrollView.frameLayoutGuide.heightAnchor),
         ])
 
+        var flexibleSpacerViews: [UIView] = []
+
         if let orderArray = layout.blocks?.order {
             for block in orderArray {
                 var blockView: UIView?
@@ -535,7 +537,11 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 case .image(let ib):
                     blockView = renderImageBlock(ib)
                 case .spacer(let sb):
-                    blockView = renderSpacerBlock(sb)
+                    let spacerView = renderSpacerBlock(sb)
+                    if sb.fillAvailableSpacing == true {
+                        flexibleSpacerViews.append(spacerView)
+                    }
+                    blockView = spacerView
                 case .button(let bb):
                     blockView = renderButtonBlock(bb)
                 case .buttonGroup(let bg):
@@ -547,6 +553,13 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 if let view = blockView {
                     contentStackView.addArrangedSubview(view)
                 }
+            }
+        }
+
+        if flexibleSpacerViews.count > 1 {
+            let referenceSpacer = flexibleSpacerViews[0]
+            for spacer in flexibleSpacerViews.dropFirst() {
+                spacer.heightAnchor.constraint(equalTo: referenceSpacer.heightAnchor).isActive = true
             }
         }
 
@@ -846,8 +859,8 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         let spacer = UIView()
         spacer.translatesAutoresizingMaskIntoConstraints = false
         if block.fillAvailableSpacing == true {
-            spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
-            spacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+            spacer.setContentHuggingPriority(.fittingSizeLevel, for: .vertical)
+            spacer.setContentCompressionResistancePriority(.fittingSizeLevel, for: .vertical)
             return spacer
         }
 
