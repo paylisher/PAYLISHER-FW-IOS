@@ -40,7 +40,7 @@ class StyleViewController: UIViewController {
         sv.axis = .vertical
         sv.spacing = 0
         sv.alignment = .fill
-        sv.distribution = .equalSpacing
+        sv.distribution = .fill
         return sv
     }()
 
@@ -125,6 +125,10 @@ class StyleViewController: UIViewController {
         // ScrollView + StackView for block content
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.showsVerticalScrollIndicator = false
+        let isContentScrollable = layoutType == "fullscreen"
+        scrollView.isScrollEnabled = isContentScrollable
+        scrollView.alwaysBounceVertical = isContentScrollable
+        scrollView.bounces = isContentScrollable
         contentStackView.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(scrollView)
         scrollView.addSubview(contentStackView)
@@ -142,6 +146,7 @@ class StyleViewController: UIViewController {
             contentStackView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             contentStackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
             contentStackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+            contentStackView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.frameLayoutGuide.heightAnchor),
         ])
 
         var centerYConstraint: NSLayoutConstraint?
@@ -641,8 +646,14 @@ class StyleViewController: UIViewController {
 
     private func renderSpacerBlock(_ block: CustomInAppPayload.Layout.Blocks.SpacerBlock) -> UIView {
         let spacer = UIView()
-        let height = CGFloat(block.verticalSpacing ?? 8)
         spacer.translatesAutoresizingMaskIntoConstraints = false
+        if block.fillAvailableSpacing == true {
+            spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+            spacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+            return spacer
+        }
+
+        let height = CGFloat(block.verticalSpacing ?? 8)
         spacer.heightAnchor.constraint(equalToConstant: height).isActive = true
         return spacer
     }

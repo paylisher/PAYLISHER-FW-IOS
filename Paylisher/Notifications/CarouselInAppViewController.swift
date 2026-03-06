@@ -137,7 +137,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
 
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
         bottomBar.backgroundColor = .clear
-        containerView.addSubview(bottomBar)
+        view.addSubview(bottomBar)
 
         prevArrow.translatesAutoresizingMaskIntoConstraints = false
         nextArrow.translatesAutoresizingMaskIntoConstraints = false
@@ -200,27 +200,20 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 bottomBar.bottomAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.bottomAnchor),
             ])
         } else {
-            let contentH = estimatedFirstPageHeight(for: 350)
-            let bottomBarH: CGFloat = layouts.count > 1 ? 48 : 0
-            let topPad: CGFloat = 8
-            let naturalH = contentH + bottomBarH + topPad
-            let maxH = UIScreen.main.bounds.height * 0.75
-            let containerH = min(naturalH, maxH)
-
             NSLayoutConstraint.activate([
-                containerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 6),
+                containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -6),
                 containerView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-                containerView.widthAnchor.constraint(equalToConstant: 350),
-                containerView.heightAnchor.constraint(equalToConstant: containerH),
+                containerView.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: modalHeightRatio),
 
-                pageScrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 8),
+                pageScrollView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 16),
                 pageScrollView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 pageScrollView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                pageScrollView.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+                pageScrollView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16),
 
+                bottomBar.topAnchor.constraint(equalTo: containerView.bottomAnchor, constant: 8),
                 bottomBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
                 bottomBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                bottomBar.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
             ])
         }
 
@@ -243,7 +236,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         if isFullscreen {
             containerView.layer.cornerRadius = 0
         } else {
-            containerView.layer.cornerRadius = CGFloat(style.radius ?? 8)
+            containerView.layer.cornerRadius = 8
         }
 
         containerView.clipsToBounds = true
@@ -437,60 +430,6 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         }
     }
 
-    // MARK: - Dynamic height estimation
-
-    private func estimatedFirstPageHeight(for width: CGFloat) -> CGFloat {
-        guard let layout = layouts.first, let blocks = layout.blocks?.order else { return 350 }
-
-        var height: CGFloat = 8
-        for block in blocks {
-            switch block {
-            case .image:
-                let modalHeight = UIScreen.main.bounds.height * modalHeightRatio
-                let imageHeight = max(modalHeight * modalImageHeightRatio, modalImageMinHeight)
-                height += imageHeight
-
-            case .text(let tb):
-                let text = tb.content?[defaultLang] ?? tb.content?.values.first ?? ""
-                let size = CGFloat(Double(tb.fontSize ?? "14") ?? 14)
-                let hm = CGFloat(tb.horizontalMargin ?? 0)
-                let tw = width - (hm > 0 ? (hm + extraHorizontalInset) * 2 : contentHorizontalInset * 2)
-                let rect = (text as NSString).boundingRect(
-                    with: CGSize(width: tw, height: .greatestFiniteMagnitude),
-                    options: .usesLineFragmentOrigin,
-                    attributes: [.font: UIFont.systemFont(ofSize: size)],
-                    context: nil
-                )
-                height += ceil(rect.height) + 8
-
-            case .spacer(let sb):
-                height += CGFloat(sb.verticalSpacing ?? 8)
-
-            case .button(let bb):
-                let margin = CGFloat(bb.margin ?? 8)
-                let blockHeight: CGFloat
-                switch bb.verticalSize {
-                case "small": blockHeight = 32
-                case "large": blockHeight = 56
-                default: blockHeight = 44
-                }
-                height += blockHeight + margin * 2
-
-            case .buttonGroup(let bg):
-                let isHorizontal = bg.buttonGroupType == "double-horizontal"
-                let count = CGFloat(bg.buttons?.count ?? 1)
-                let rows: CGFloat = isHorizontal ? 1 : count
-                height += rows * 44 + 16
-
-            case .unknown:
-                break
-            }
-        }
-
-        height += 8
-        return height
-    }
-
     // MARK: - Page building
 
     private func buildPageView(_ layout: CustomInAppPayload.Layout) -> UIView {
@@ -517,13 +456,16 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
         contentScrollView.showsVerticalScrollIndicator = false
         contentScrollView.showsHorizontalScrollIndicator = false
         contentScrollView.backgroundColor = .clear
+        contentScrollView.isScrollEnabled = isFullscreen
+        contentScrollView.alwaysBounceVertical = isFullscreen
+        contentScrollView.bounces = isFullscreen
         contentContainer.addSubview(contentScrollView)
 
         let contentStackView = UIStackView()
         contentStackView.axis = .vertical
         contentStackView.spacing = 0
         contentStackView.alignment = .fill
-        contentStackView.distribution = .equalSpacing
+        contentStackView.distribution = .fill
         contentStackView.translatesAutoresizingMaskIntoConstraints = false
 
         let topSpacer = UIView()
@@ -689,7 +631,9 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             return
         }
 
-        let arrowsEnabled = currentLayout?.style?.navigationalArrows == true
+        let arrowsEnabled = layouts.contains { layout in
+            layout.style?.navigationalArrows == true
+        }
         guard arrowsEnabled else {
             prevArrow.isHidden = true
             nextArrow.isHidden = true
@@ -879,6 +823,12 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
     private func renderSpacerBlock(_ block: CustomInAppPayload.Layout.Blocks.SpacerBlock) -> UIView {
         let spacer = UIView()
         spacer.translatesAutoresizingMaskIntoConstraints = false
+        if block.fillAvailableSpacing == true {
+            spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+            spacer.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+            return spacer
+        }
+
         spacer.heightAnchor.constraint(equalToConstant: CGFloat(block.verticalSpacing ?? 8)).isActive = true
         return spacer
     }
