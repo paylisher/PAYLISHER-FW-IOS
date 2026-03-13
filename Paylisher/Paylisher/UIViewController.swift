@@ -12,6 +12,13 @@
     import Foundation
     import UIKit
 
+    private enum PaylisherAutoScreenCaptureDeduper {
+        static let dedupeWindowSeconds: TimeInterval = 1.0
+        static let lock = NSLock()
+        static var lastScreenName: String?
+        static var lastCapturedAt: Date?
+    }
+
     extension UIViewController {
         static func swizzleScreenView() {
             swizzle(forClass: UIViewController.self,
@@ -42,14 +49,28 @@
             return nil
         }
 
-        static func getViewControllerName(_ viewController: UIViewController) -> String? {
-            let className = String(describing: viewController.classForCoder)
-            
-            // Check for mapped screen name first
+        static func getViewControllerName(_ viewController: UIViewController, className overrideClassName: String? = nil) -> String? {
+            let className = overrideClassName ?? String(describing: viewController.classForCoder)
+
+            // Check for mapped screen name first.
             if let mappedName = PaylisherScreenMapper.shared.screenName(for: className) {
                 return mappedName
             }
-            
+
+            if isSwiftUIHostingController(className) {
+                // Prefer explicit titles if available.
+                if let title = resolvedTitle(from: viewController) {
+                    return title
+                }
+
+                if let inferredName = extractSwiftUIViewName(from: className) {
+                    return inferredName
+                }
+
+                hedgeLog("[AutoScreen] Skipping SwiftUI auto screen capture. Could not resolve a meaningful screen name from: \(className)")
+                return nil
+            }
+
             var title: String? = className.replacingOccurrences(of: "ViewController", with: "")
 
             if title?.isEmpty == true {
@@ -57,6 +78,114 @@
             }
 
             return title
+        }
+
+        static func isSwiftUIHostingController(_ className: String) -> Bool {
+            className.contains("UIHostingController")
+                || className.contains("PresentationHostingController")
+        }
+
+        static func extractSwiftUIViewName(from className: String) -> String? {
+            guard let payload = extractGenericPayload(from: className) else {
+                return nil
+            }
+
+            let placeholderTokens: Set<String> = [
+                "UIHostingController", "PresentationHostingController",
+                "ModifiedContent", "AnyView", "TupleView", "Optional",
+                "NavigationView", "NavigationStack", "NavigationSplitView",
+                "VStack", "HStack", "ZStack", "ScrollView", "List", "Group",
+                "GeometryReader", "Section", "ForEach", "LazyVStack",
+                "LazyHStack", "LazyVGrid", "LazyHGrid",
+                "RootModifier", "Content", "EmptyView", "SwiftUI",
+            ]
+
+            let tokens = payload
+                .split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "_" })
+                .map(String.init)
+                .filter { token in
+                    !token.isEmpty
+                        && !token.hasPrefix("_")
+                        && !placeholderTokens.contains(token)
+                        && !token.hasSuffix("Modifier")
+                }
+
+            if let viewLikeToken = tokens.first(where: { $0.hasSuffix("View") || $0.hasSuffix("Screen") }) {
+                return viewLikeToken
+            }
+
+            if tokens.count == 1 {
+                return tokens.first
+            }
+
+            return nil
+        }
+
+        static func extractGenericPayload(from className: String) -> String? {
+            guard let start = className.firstIndex(of: "<") else {
+                return nil
+            }
+
+            let payloadStart = className.index(after: start)
+            var cursor = payloadStart
+            var nestedDepth = 0
+
+            while cursor < className.endIndex {
+                let character = className[cursor]
+                if character == "<" {
+                    nestedDepth += 1
+                } else if character == ">" {
+                    if nestedDepth == 0 {
+                        return String(className[payloadStart ..< cursor])
+                    }
+                    nestedDepth -= 1
+                }
+                cursor = className.index(after: cursor)
+            }
+
+            return nil
+        }
+
+        static func shouldCaptureAutoScreenView(_ screenName: String, at timestamp: Date = now()) -> Bool {
+            var shouldCapture = true
+
+            PaylisherAutoScreenCaptureDeduper.lock.withLock {
+                if
+                    let lastScreenName = PaylisherAutoScreenCaptureDeduper.lastScreenName,
+                    let lastCapturedAt = PaylisherAutoScreenCaptureDeduper.lastCapturedAt,
+                    lastScreenName == screenName,
+                    timestamp.timeIntervalSince(lastCapturedAt) < PaylisherAutoScreenCaptureDeduper.dedupeWindowSeconds
+                {
+                    shouldCapture = false
+                    return
+                }
+
+                PaylisherAutoScreenCaptureDeduper.lastScreenName = screenName
+                PaylisherAutoScreenCaptureDeduper.lastCapturedAt = timestamp
+            }
+
+            return shouldCapture
+        }
+
+        static func resetAutoScreenCaptureDedupeState() {
+            PaylisherAutoScreenCaptureDeduper.lock.withLock {
+                PaylisherAutoScreenCaptureDeduper.lastScreenName = nil
+                PaylisherAutoScreenCaptureDeduper.lastCapturedAt = nil
+            }
+        }
+
+        private static func resolvedTitle(from viewController: UIViewController) -> String? {
+            let title = viewController.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let title, !title.isEmpty {
+                return title
+            }
+
+            let navigationTitle = viewController.navigationItem.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let navigationTitle, !navigationTitle.isEmpty {
+                return navigationTitle
+            }
+
+            return nil
         }
 
         private func captureScreenView(_ window: UIWindow?) {
@@ -69,7 +198,11 @@
             let name = UIViewController.getViewControllerName(top)
 
             if let name = name {
-                PaylisherSDK.shared.screen(name)
+                if UIViewController.shouldCaptureAutoScreenView(name) {
+                    PaylisherSDK.shared.screen(name)
+                } else {
+                    hedgeLog("[AutoScreen] Skipping duplicate auto screen event for '\(name)' within \(PaylisherAutoScreenCaptureDeduper.dedupeWindowSeconds)s window.")
+                }
             }
         }
 
