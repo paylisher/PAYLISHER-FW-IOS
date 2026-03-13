@@ -61,14 +61,27 @@ import Quick
 
             it("dedupes repeated auto screen names in a short interval") {
                 let baseTime = Date(timeIntervalSince1970: 1000)
+                let viewController = UIViewController()
 
-                let firstCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", at: baseTime)
-                let duplicateCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", at: baseTime.addingTimeInterval(0.25))
-                let captureAfterWindow = UIViewController.shouldCaptureAutoScreenView("ContentView", at: baseTime.addingTimeInterval(1.25))
+                let firstCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime)
+                let duplicateCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime.addingTimeInterval(0.25))
+                let captureAfterWindow = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime.addingTimeInterval(1.25))
 
                 expect(firstCapture) == true
                 expect(duplicateCapture) == false
                 expect(captureAfterWindow) == true
+            }
+
+            it("does not dedupe when controller instance changes") {
+                let baseTime = Date(timeIntervalSince1970: 2000)
+                let firstController = UIViewController()
+                let secondController = UIViewController()
+
+                let firstCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: firstController, at: baseTime)
+                let secondCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: secondController, at: baseTime.addingTimeInterval(0.25))
+
+                expect(firstCapture) == true
+                expect(secondCapture) == true
             }
         }
     }

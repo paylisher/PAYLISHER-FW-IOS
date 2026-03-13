@@ -17,6 +17,7 @@
         static let lock = NSLock()
         static var lastScreenName: String?
         static var lastCapturedAt: Date?
+        static var lastControllerIdentifier: ObjectIdentifier?
     }
 
     extension UIViewController {
@@ -146,14 +147,21 @@
             return nil
         }
 
-        static func shouldCaptureAutoScreenView(_ screenName: String, at timestamp: Date = now()) -> Bool {
+        static func shouldCaptureAutoScreenView(_ screenName: String,
+                                                from viewController: UIViewController? = nil,
+                                                at timestamp: Date = now()) -> Bool
+        {
             var shouldCapture = true
+            let currentControllerIdentifier = viewController.map { ObjectIdentifier($0) }
 
             PaylisherAutoScreenCaptureDeduper.lock.withLock {
                 if
                     let lastScreenName = PaylisherAutoScreenCaptureDeduper.lastScreenName,
                     let lastCapturedAt = PaylisherAutoScreenCaptureDeduper.lastCapturedAt,
+                    let lastControllerIdentifier = PaylisherAutoScreenCaptureDeduper.lastControllerIdentifier,
+                    let currentControllerIdentifier = currentControllerIdentifier,
                     lastScreenName == screenName,
+                    lastControllerIdentifier == currentControllerIdentifier,
                     timestamp.timeIntervalSince(lastCapturedAt) < PaylisherAutoScreenCaptureDeduper.dedupeWindowSeconds
                 {
                     shouldCapture = false
@@ -162,6 +170,7 @@
 
                 PaylisherAutoScreenCaptureDeduper.lastScreenName = screenName
                 PaylisherAutoScreenCaptureDeduper.lastCapturedAt = timestamp
+                PaylisherAutoScreenCaptureDeduper.lastControllerIdentifier = currentControllerIdentifier
             }
 
             return shouldCapture
@@ -171,6 +180,7 @@
             PaylisherAutoScreenCaptureDeduper.lock.withLock {
                 PaylisherAutoScreenCaptureDeduper.lastScreenName = nil
                 PaylisherAutoScreenCaptureDeduper.lastCapturedAt = nil
+                PaylisherAutoScreenCaptureDeduper.lastControllerIdentifier = nil
             }
         }
 
@@ -189,16 +199,14 @@
         }
 
         private func captureScreenView(_ window: UIWindow?) {
-            var rootController = window?.rootViewController
-            if rootController == nil {
-                rootController = activeController()
-            }
-            guard let top = findVisibleViewController(activeController()) else { return }
+            let rootController = window?.rootViewController ?? activeController()
+            guard let top = findVisibleViewController(rootController) else { return }
+            guard top === self else { return }
 
             let name = UIViewController.getViewControllerName(top)
 
             if let name = name {
-                if UIViewController.shouldCaptureAutoScreenView(name) {
+                if UIViewController.shouldCaptureAutoScreenView(name, from: top) {
                     PaylisherSDK.shared.screen(name)
                 } else {
                     hedgeLog("[AutoScreen] Skipping duplicate auto screen event for '\(name)' within \(PaylisherAutoScreenCaptureDeduper.dedupeWindowSeconds)s window.")
