@@ -209,17 +209,34 @@
         private func captureScreenView(_ window: UIWindow?) {
             let rootController = window?.rootViewController ?? activeController()
             guard let top = findVisibleViewController(rootController) else { return }
-            guard top === self else { return }
+            guard let captureCandidate = UIViewController.screenCaptureCandidate(current: self, top: top) else { return }
 
-            let name = UIViewController.getViewControllerName(top)
+            let name = UIViewController.getViewControllerName(captureCandidate)
 
             if let name = name {
-                if UIViewController.shouldCaptureAutoScreenView(name, from: top) {
+                if UIViewController.shouldCaptureAutoScreenView(name, from: captureCandidate) {
                     PaylisherSDK.shared.screen(name)
                 } else {
                     hedgeLog("[AutoScreen] Skipping duplicate auto screen event for '\(name)' within \(PaylisherAutoScreenCaptureDeduper.dedupeWindowSeconds)s window.")
                 }
             }
+        }
+
+        static func screenCaptureCandidate(current: UIViewController, top: UIViewController) -> UIViewController? {
+            let currentClassName = String(describing: current.classForCoder)
+
+            // SwiftUI TabView and nested hosting flows may call viewDidAppear on child
+            // hosting controllers while `top` still resolves to the app root host.
+            // In that case, prefer the appearing hosting controller.
+            if isSwiftUIHostingController(currentClassName) {
+                return current
+            }
+
+            if current === top {
+                return top
+            }
+
+            return nil
         }
 
         @objc func viewDidApperOverride(animated: Bool) {

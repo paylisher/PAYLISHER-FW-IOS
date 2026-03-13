@@ -8,6 +8,9 @@
 import Foundation
 import Nimble
 import Quick
+#if canImport(SwiftUI)
+    import SwiftUI
+#endif
 
 #if os(iOS) || os(tvOS)
     import UIKit
@@ -101,6 +104,34 @@ import Quick
                 expect(firstCapture) == true
                 expect(duplicateCapture) == false
                 expect(captureAfterReset) == true
+            }
+
+            #if canImport(SwiftUI)
+                it("prefers current controller when it is a SwiftUI hosting controller") {
+                    let current = UIHostingController(rootView: Text("Current"))
+                    let top = UIHostingController(rootView: Text("Top"))
+
+                    let candidate = UIViewController.screenCaptureCandidate(current: current, top: top)
+
+                    expect(candidate) === current
+                }
+            #endif
+
+            it("uses top controller when current equals top for UIKit flow") {
+                let current = UIViewController()
+
+                let candidate = UIViewController.screenCaptureCandidate(current: current, top: current)
+
+                expect(candidate) === current
+            }
+
+            it("ignores non-top non-hosting UIKit controllers") {
+                let current = UIViewController()
+                let top = UIViewController()
+
+                let candidate = UIViewController.screenCaptureCandidate(current: current, top: top)
+
+                expect(candidate).to(beNil())
             }
         }
     }
