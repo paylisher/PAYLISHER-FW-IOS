@@ -168,6 +168,14 @@
                     return
                 }
 
+                if
+                    let lastScreenName = PaylisherAutoScreenCaptureDeduper.lastScreenName,
+                    lastScreenName == screenName
+                {
+                    shouldCapture = false
+                    return
+                }
+
                 PaylisherAutoScreenCaptureDeduper.lastScreenName = screenName
                 PaylisherAutoScreenCaptureDeduper.lastCapturedAt = timestamp
                 PaylisherAutoScreenCaptureDeduper.lastControllerIdentifier = currentControllerIdentifier

@@ -65,23 +65,42 @@ import Quick
 
                 let firstCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime)
                 let duplicateCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime.addingTimeInterval(0.25))
-                let captureAfterWindow = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime.addingTimeInterval(1.25))
+                let captureAfterWindow = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime.addingTimeInterval(5.25))
 
                 expect(firstCapture) == true
                 expect(duplicateCapture) == false
-                expect(captureAfterWindow) == true
+                expect(captureAfterWindow) == false
             }
 
-            it("does not dedupe when controller instance changes") {
+            it("captures again after screen transition to a different screen") {
                 let baseTime = Date(timeIntervalSince1970: 2000)
                 let firstController = UIViewController()
                 let secondController = UIViewController()
+                let thirdController = UIViewController()
 
                 let firstCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: firstController, at: baseTime)
-                let secondCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: secondController, at: baseTime.addingTimeInterval(0.25))
+                let secondCapture = UIViewController.shouldCaptureAutoScreenView("SettingsView", from: secondController, at: baseTime.addingTimeInterval(0.25))
+                let thirdCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: thirdController, at: baseTime.addingTimeInterval(0.5))
 
                 expect(firstCapture) == true
                 expect(secondCapture) == true
+                expect(thirdCapture) == true
+            }
+
+            it("allows same screen after dedupe reset") {
+                let baseTime = Date(timeIntervalSince1970: 3000)
+                let viewController = UIViewController()
+
+                let firstCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime)
+                let duplicateCapture = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime.addingTimeInterval(0.2))
+
+                UIViewController.resetAutoScreenCaptureDedupeState()
+
+                let captureAfterReset = UIViewController.shouldCaptureAutoScreenView("ContentView", from: viewController, at: baseTime.addingTimeInterval(0.3))
+
+                expect(firstCapture) == true
+                expect(duplicateCapture) == false
+                expect(captureAfterReset) == true
             }
         }
     }

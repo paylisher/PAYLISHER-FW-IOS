@@ -1288,6 +1288,10 @@ let maxRetryDelay = 30.0
     }
 
     @objc func handleAppDidBecomeActive() {
+        #if os(iOS) || os(tvOS)
+            UIViewController.resetAutoScreenCaptureDedupeState()
+        #endif
+
         PaylisherSessionManager.shared.rotateSessionIdIfRequired {
             self.resetViews()
         }
