@@ -61,11 +61,11 @@
             if isSwiftUIHostingController(className) {
                 // Prefer explicit titles if available.
                 if let title = resolvedTitle(from: viewController) {
-                    return title
+                    return mapResolvedScreenNameIfNeeded(title)
                 }
 
                 if let inferredName = extractSwiftUIViewName(from: className) {
-                    return inferredName
+                    return mapResolvedScreenNameIfNeeded(inferredName)
                 }
 
                 hedgeLog("[AutoScreen] Skipping SwiftUI auto screen capture. Could not resolve a meaningful screen name from: \(className)")
@@ -78,7 +78,11 @@
                 title = viewController.title ?? nil
             }
 
-            return title
+            guard let title else {
+                return nil
+            }
+
+            return mapResolvedScreenNameIfNeeded(title)
         }
 
         static func isSwiftUIHostingController(_ className: String) -> Bool {
@@ -204,6 +208,14 @@
             }
 
             return nil
+        }
+
+        private static func mapResolvedScreenNameIfNeeded(_ name: String) -> String {
+            if let mappedName = PaylisherScreenMapper.shared.mappedName(for: name) {
+                return mappedName
+            }
+
+            return name
         }
 
         private func captureScreenView(_ window: UIWindow?) {
