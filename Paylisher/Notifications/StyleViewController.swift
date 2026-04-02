@@ -491,6 +491,20 @@ class StyleViewController: UIViewController {
     private func applyBlocks() {
         guard let orderArray = blocks.order else { return }
 
+        let hasFlexibleSpacer = orderArray.contains {
+            if case .spacer(let sb) = $0 { return sb.fillAvailableSpacing == true }
+            return false
+        }
+
+        let topSpacer = UIView()
+        let bottomSpacer = UIView()
+
+        if !hasFlexibleSpacer {
+            topSpacer.translatesAutoresizingMaskIntoConstraints = false
+            bottomSpacer.translatesAutoresizingMaskIntoConstraints = false
+            contentStackView.addArrangedSubview(topSpacer)
+        }
+
         for block in orderArray {
             var blockView: UIView?
             switch block {
@@ -510,6 +524,34 @@ class StyleViewController: UIViewController {
             if let v = blockView {
                 contentStackView.addArrangedSubview(v)
             }
+        }
+
+        if !hasFlexibleSpacer {
+            contentStackView.addArrangedSubview(bottomSpacer)
+            applyContentAlignment(blocks.align, topSpacer: topSpacer, bottomSpacer: bottomSpacer)
+        }
+    }
+
+    private func applyContentAlignment(_ align: String?, topSpacer: UIView, bottomSpacer: UIView) {
+        let normalized = (align ?? "top").lowercased()
+
+        switch normalized {
+        case "center":
+            NSLayoutConstraint.activate([
+                topSpacer.heightAnchor.constraint(greaterThanOrEqualToConstant: 0),
+                bottomSpacer.heightAnchor.constraint(greaterThanOrEqualToConstant: 0),
+                topSpacer.heightAnchor.constraint(equalTo: bottomSpacer.heightAnchor),
+            ])
+        case "bottom":
+            NSLayoutConstraint.activate([
+                topSpacer.heightAnchor.constraint(greaterThanOrEqualToConstant: 0),
+                bottomSpacer.heightAnchor.constraint(equalToConstant: 0),
+            ])
+        default: // "top"
+            NSLayoutConstraint.activate([
+                topSpacer.heightAnchor.constraint(equalToConstant: 0),
+                bottomSpacer.heightAnchor.constraint(greaterThanOrEqualToConstant: 0),
+            ])
         }
     }
 
