@@ -696,6 +696,22 @@ let maxRetryDelay = 30.0
             ))
 
             reloadFeatureFlags()
+        } else if distinctId == oldDistinctId {
+            // Already identified with the same userId (e.g. re-login on same or different device
+            // without calling reset first). Always re-fire $identify so that userProperties
+            // (token, deviceID, platform) are updated to reflect the current device.
+            hedgeLog("re-identifying with same id: \(distinctId), updating person properties")
+
+            let properties = buildProperties(distinctId: distinctId, properties: [
+                "distinct_id": distinctId,
+            ], userProperties: sanitizeDicionary(userProperties), userPropertiesSetOnce: sanitizeDicionary(userPropertiesSetOnce))
+            let sanitizedProperties = sanitizeProperties(properties)
+
+            queue.add(PaylisherEvent(
+                event: "$identify",
+                distinctId: distinctId,
+                properties: sanitizedProperties
+            ))
         } else {
             hedgeLog("already identified with id: \(oldDistinctId)")
         }
