@@ -213,10 +213,18 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         print("Bildirime tıklandı.")
 
         if let actionURLString = userInfo["action"] as? String,
+           !actionURLString.isEmpty,
            let actionURL = URL(string: actionURLString) {
-            UIApplication.shared.open(actionURL, options: [:], completionHandler: nil)
+            print("FCM -> action URL bulundu: \(actionURLString)")
+            // Delay added: when the app launches from killed state, the scene may not be
+            // fully active yet. Dispatching async gives the window time to become ready.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                UIApplication.shared.open(actionURL, options: [:], completionHandler: { success in
+                    print("FCM -> URL açma sonucu: \(success), url: \(actionURLString)")
+                })
+            }
         } else {
-            print("Action URL bulunamadı!")
+            print("Action URL bulunamadı veya boş! action değeri: \(userInfo["action"] ?? "nil")")
         }
 
         completionHandler()
