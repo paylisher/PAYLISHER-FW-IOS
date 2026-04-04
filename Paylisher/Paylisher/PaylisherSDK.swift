@@ -672,20 +672,26 @@ let maxRetryDelay = 30.0
         guard let queue, let storageManager = config.storageManager else {
             return
         }
-        let oldDistinctId = getDistinctId()
+        let previousDistinctId = getDistinctId()
+        let wasIdentified = storageManager.isIdentified()
 
-        let isIdentified = storageManager.isIdentified()
+        if distinctId != previousDistinctId, wasIdentified {
+            prepareForUserSwitch(from: previousDistinctId, to: distinctId, storageManager: storageManager)
+        }
 
-        if distinctId != oldDistinctId, !isIdentified {
+        let currentDistinctId = getDistinctId()
+        let isCurrentlyIdentified = storageManager.isIdentified()
+
+        if distinctId != currentDistinctId, !isCurrentlyIdentified {
             // We keep the AnonymousId to be used by decide calls and identify to link the previousId
-            storageManager.setAnonymousId(oldDistinctId)
+            storageManager.setAnonymousId(currentDistinctId)
             storageManager.setDistinctId(distinctId)
 
             storageManager.setIdentified(true)
 
             let properties = buildProperties(distinctId: distinctId, properties: [
                 "distinct_id": distinctId,
-                "$anon_distinct_id": oldDistinctId,
+                "$anon_distinct_id": currentDistinctId,
             ], userProperties: sanitizeDicionary(userProperties), userPropertiesSetOnce: sanitizeDicionary(userPropertiesSetOnce))
             let sanitizedProperties = sanitizeProperties(properties)
 
@@ -696,7 +702,7 @@ let maxRetryDelay = 30.0
             ))
 
             reloadFeatureFlags()
-        } else if distinctId == oldDistinctId, isIdentified, config.repeatedIdentifyBehavior == .capture {
+        } else if distinctId == currentDistinctId, isCurrentlyIdentified, config.repeatedIdentifyBehavior == .capture {
             capture(
                 "$identify",
                 distinctId: distinctId,
@@ -705,11 +711,30 @@ let maxRetryDelay = 30.0
                 userPropertiesSetOnce: sanitizeDicionary(userPropertiesSetOnce),
                 groups: nil
             )
-        } else if distinctId != oldDistinctId, isIdentified {
-            hedgeLog("identify called with a different distinctId while another user is active. Call reset() before switching users.")
         } else {
-            hedgeLog("already identified with id: \(oldDistinctId)")
+            hedgeLog("already identified with id: \(currentDistinctId)")
         }
+    }
+
+    private func prepareForUserSwitch(from previousDistinctId: String,
+                                      to newDistinctId: String,
+                                      storageManager: PaylisherStorageManager)
+    {
+        hedgeLog("Switching identified user from \(previousDistinctId) to \(newDistinctId). Clearing identity state before identify.")
+
+        storageManager.reset(true)
+        storage?.remove(key: .groups)
+        storage?.remove(key: .enabledFeatureFlags)
+        storage?.remove(key: .enabledFeatureFlagPayloads)
+        storage?.remove(key: .sessionReplay)
+
+        featureFlags?.clear()
+        flagCallReported.removeAll()
+
+        storageManager.setPersonProcessing(true)
+
+        endSession()
+        startSession()
     }
 
     @objc public func capture(_ event: String) {
