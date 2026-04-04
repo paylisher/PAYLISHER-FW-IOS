@@ -18,7 +18,8 @@ class PaylisherSDKTest: QuickSpec {
                 flushAt: Int = 1,
                 optOut: Bool = false,
                 propertiesSanitizer: PaylisherPropertiesSanitizer? = nil,
-                personProfiles: PaylisherPersonProfiles = .identifiedOnly) -> PaylisherSDK
+                personProfiles: PaylisherPersonProfiles = .identifiedOnly,
+                repeatedIdentifyBehavior: PaylisherRepeatedIdentifyBehavior = .ignore) -> PaylisherSDK
     {
         let config = PaylisherConfig(apiKey: "123", host: "http://localhost:9001")
         config.flushAt = flushAt
@@ -30,6 +31,7 @@ class PaylisherSDKTest: QuickSpec {
         config.optOut = optOut
         config.propertiesSanitizer = propertiesSanitizer
         config.personProfiles = personProfiles
+        config.repeatedIdentifyBehavior = repeatedIdentifyBehavior
         return PaylisherSDK.with(config)
     }
 
@@ -183,6 +185,31 @@ class PaylisherSDKTest: QuickSpec {
 
             let setOnce = event.properties["$set_once"] as? [String: Any] ?? [:]
             expect(setOnce["userPropOnce"] as? String) == "value"
+
+            sut.reset()
+            sut.close()
+        }
+
+        it("captures identify event again when repeated identify behavior is capture") {
+            let sut = self.getSut(repeatedIdentifyBehavior: .capture)
+
+            sut.identify("distinctId",
+                         userProperties: ["device": "ios-a"],
+                         userPropertiesSetOnce: ["userPropOnce": "value"])
+
+            sut.identify("distinctId",
+                         userProperties: ["device": "ios-a-refresh"],
+                         userPropertiesSetOnce: ["userPropOnce2": "value2"])
+
+            let events = getBatchedEvents(server)
+
+            expect(events.count) == 2
+            expect(events[0].event) == "$identify"
+            expect(events[1].event) == "$identify"
+            expect(events[1].properties["$anon_distinct_id"]).to(beNil())
+
+            let set = events[1].properties["$set"] as? [String: Any] ?? [:]
+            expect(set["device"] as? String) == "ios-a-refresh"
 
             sut.reset()
             sut.close()

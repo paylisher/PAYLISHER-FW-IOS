@@ -696,6 +696,17 @@ let maxRetryDelay = 30.0
             ))
 
             reloadFeatureFlags()
+        } else if distinctId == oldDistinctId, isIdentified, config.repeatedIdentifyBehavior == .capture {
+            capture(
+                "$identify",
+                distinctId: distinctId,
+                properties: nil,
+                userProperties: sanitizeDicionary(userProperties),
+                userPropertiesSetOnce: sanitizeDicionary(userPropertiesSetOnce),
+                groups: nil
+            )
+        } else if distinctId != oldDistinctId, isIdentified {
+            hedgeLog("identify called with a different distinctId while another user is active. Call reset() before switching users.")
         } else {
             hedgeLog("already identified with id: \(oldDistinctId)")
         }
