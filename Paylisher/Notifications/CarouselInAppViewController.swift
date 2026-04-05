@@ -18,6 +18,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
     private let layouts: [CustomInAppPayload.Layout]
     private let defaultLang: String
     private let isFullscreen: Bool
+    private let pushId: String?
 
     private var currentIndex: Int = 0
     private var hasAppliedInitialTransition = false
@@ -51,10 +52,16 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
 
     // MARK: - Init
 
-    init(layouts: [CustomInAppPayload.Layout], defaultLang: String, isFullscreen: Bool = false) {
+    init(
+        layouts: [CustomInAppPayload.Layout],
+        defaultLang: String,
+        isFullscreen: Bool = false,
+        pushId: String? = nil
+    ) {
         self.layouts      = layouts
         self.defaultLang  = defaultLang
         self.isFullscreen = isFullscreen
+        self.pushId = pushId
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -398,7 +405,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
 
         if extra.overlay?.action == "close" {
             overlayView.isUserInteractionEnabled = true
-            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(didTapClose))
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleOverlayClose))
             overlayView.addGestureRecognizer(tapGesture)
         }
     }
@@ -692,6 +699,36 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
     }
 
     @objc private func didTapClose() {
+        dismissInApp(via: "closeButton")
+    }
+
+    @objc private func handleOverlayClose() {
+        dismissInApp(via: "overlay")
+    }
+
+    private func captureButtonClick(action: String, type: String, label: String? = nil) {
+        var properties: [String: Any?] = [
+            "action": action,
+            "type": type,
+        ]
+        if let label, !label.isEmpty {
+            properties["label"] = label
+        }
+
+        PaylisherNotificationEventTracker.capture(
+            "inappMessageButtonClick",
+            pushId: pushId,
+            properties: properties
+        )
+    }
+
+    private func dismissInApp(via: String) {
+        PaylisherNotificationEventTracker.capture(
+            "inappMessageClose",
+            pushId: pushId,
+            properties: ["via": via]
+        )
+
         guard let transitionType = currentLayout?.extra?.transition ?? layouts.first?.extra?.transition else {
             dismiss(animated: true)
             return
@@ -768,6 +805,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
                 let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
                 wrapper.isUserInteractionEnabled = true
                 wrapper.accessibilityIdentifier = action
+                wrapper.accessibilityValue = "text"
                 wrapper.addGestureRecognizer(tap)
             }
 
@@ -789,6 +827,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
             wrapper.isUserInteractionEnabled = true
             wrapper.accessibilityIdentifier = action
+            wrapper.accessibilityValue = "text"
             wrapper.addGestureRecognizer(tap)
         }
 
@@ -849,6 +888,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
             wrapper.isUserInteractionEnabled = true
             wrapper.accessibilityIdentifier = link
+            wrapper.accessibilityValue = "image"
             wrapper.addGestureRecognizer(tap)
         }
 
@@ -1021,6 +1061,7 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
 
         let action = block.action ?? ""
         button.accessibilityIdentifier = action
+        button.accessibilityValue = "button"
         button.addTarget(self, action: #selector(handleButtonTap(_:)), for: .touchUpInside)
 
         return button
@@ -1062,23 +1103,26 @@ class CarouselInAppViewController: UIViewController, UIScrollViewDelegate {
 
     @objc private func handleButtonTap(_ sender: UIButton) {
         let action = sender.accessibilityIdentifier ?? ""
+        captureButtonClick(action: action, type: "button", label: sender.currentTitle)
         handleBlockAction(action)
     }
 
     @objc private func handleTapAction(_ gesture: UITapGestureRecognizer) {
         let action = gesture.view?.accessibilityIdentifier ?? ""
+        let type = gesture.view?.accessibilityValue ?? "button"
+        captureButtonClick(action: action, type: type)
         handleBlockAction(action)
     }
 
     private func handleBlockAction(_ action: String) {
         if action.isEmpty || action == "close" {
-            didTapClose()
+            dismissInApp(via: "closeButton")
             return
         }
 
         if let url = URL(string: action) {
             UIApplication.shared.open(url)
         }
-        didTapClose()
+        dismissInApp(via: "intent")
     }
 }

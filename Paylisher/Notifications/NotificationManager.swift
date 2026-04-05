@@ -31,6 +31,8 @@ public class NotificationManager {
         let displayTime = pushNotification.condition.displayTime
         
         content.userInfo = userInfo
+        content.categoryIdentifier = PaylisherNotificationEventTracker.trackedCategoryIdentifier
+        PaylisherNotificationEventTracker.registerTrackedCategory()
         
         if silent == "true" {
             content.sound = nil
@@ -46,6 +48,11 @@ public class NotificationManager {
             DispatchQueue.global(qos: .background).async {
                  self.saveToCoreData(type: type, request: request, userInfo: userInfo)
              }
+                PaylisherNotificationEventTracker.capture(
+                    "notificationReceived",
+                    userInfo: userInfo,
+                    properties: ["type": type]
+                )
                 
                 // displayTime değerine göre zamanlamayı belirleyelim:
                 if let displayTime = displayTime,
@@ -88,6 +95,8 @@ public class NotificationManager {
         let displayTime = actionBasedNotification.condition.displayTime
         
         content.userInfo = userInfo
+        content.categoryIdentifier = PaylisherNotificationEventTracker.trackedCategoryIdentifier
+        PaylisherNotificationEventTracker.registerTrackedCategory()
         
         if silent == "true" {
             content.sound = nil
@@ -103,6 +112,11 @@ public class NotificationManager {
             DispatchQueue.global(qos: .background).async {
                  self.saveToCoreData(type: type, request: request, userInfo: userInfo)
              }
+                PaylisherNotificationEventTracker.capture(
+                    "notificationReceived",
+                    userInfo: userInfo,
+                    properties: ["type": type]
+                )
                 
                 // displayTime değerine göre zamanlamayı belirleyelim:
                 if let displayTime = displayTime,
@@ -145,6 +159,8 @@ public class NotificationManager {
         let type = geofenceNotification.type
         
         content.userInfo = userInfo
+        content.categoryIdentifier = PaylisherNotificationEventTracker.trackedCategoryIdentifier
+        PaylisherNotificationEventTracker.registerTrackedCategory()
         
         if silent == "true" {
             content.sound = nil
@@ -162,6 +178,11 @@ public class NotificationManager {
                 DispatchQueue.global(qos: .background).async {
                     self.saveToCoreData(type: type, request: request, userInfo: userInfo)
                 }
+                PaylisherNotificationEventTracker.capture(
+                    "notificationReceived",
+                    userInfo: userInfo,
+                    properties: ["type": type]
+                )
                 
                completion(updatedContent)
             }
@@ -171,6 +192,11 @@ public class NotificationManager {
             DispatchQueue.global(qos: .background).async {
                 self.saveToCoreData(type: type, request: request, userInfo: userInfo)
             }
+            PaylisherNotificationEventTracker.capture(
+                "notificationReceived",
+                userInfo: userInfo,
+                properties: ["type": type]
+            )
             
             completion(content)
         }
@@ -266,6 +292,11 @@ public class NotificationManager {
                     break
                 case .inApp:
                     print("FCM customNotification inApp")
+                    PaylisherNotificationEventTracker.capture(
+                        "notificationReceived",
+                        userInfo: userInfo,
+                        properties: ["type": typeString]
+                    )
                     
                         PaylisherNativeInAppNotificationManager.shared.nativeInAppNotification(userInfo: userInfo, windowScene: windowScene)
                         PaylisherCustomInAppNotificationManager.shared.parseInAppPayload(from: userInfo, windowScene: windowScene)
@@ -298,6 +329,44 @@ public class NotificationManager {
         customNotification(windowScene: windowScene, userInfo: userInfo, content, request) { _completion in
             completion(_completion)
         }
+    }
+
+    @discardableResult
+    public func handleNotificationResponse(_ response: UNNotificationResponse) -> Bool {
+        let userInfo = response.notification.request.content.userInfo
+
+        guard let source = userInfo["source"] as? String, source == "Paylisher" else {
+            return false
+        }
+
+        if response.actionIdentifier == UNNotificationDismissActionIdentifier {
+            PaylisherNotificationEventTracker.capture(
+                "notificationDismiss",
+                userInfo: userInfo,
+                properties: ["via": "dismissAction"]
+            )
+            return true
+        }
+
+        PaylisherNotificationEventTracker.capture(
+            "notificationOpen",
+            userInfo: userInfo,
+            properties: ["title": response.notification.request.content.title]
+        )
+
+        if let actionURLString = userInfo["action"] as? String,
+           !actionURLString.isEmpty,
+           let actionURL = URL(string: actionURLString) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                UIApplication.shared.open(actionURL, options: [:], completionHandler: { success in
+                    print("FCM -> URL açma sonucu: \(success), url: \(actionURLString)")
+                })
+            }
+        } else {
+            print("Action URL bulunamadı veya boş! action değeri: \(userInfo["action"] ?? "nil")")
+        }
+
+        return true
     }
 
     private func scheduleNotification(with content: UNMutableNotificationContent, at date: Date) {
@@ -457,3 +526,58 @@ public class NotificationManager {
     
 }
 
+enum PaylisherNotificationEventTracker {
+    static let trackedCategoryIdentifier = "com.paylisher.notification.tracked"
+
+    static func normalizePushId(_ pushId: String?) -> String? {
+        let trimmed = pushId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    static func pushId(from userInfo: [AnyHashable: Any]) -> String? {
+        normalizePushId(userInfo["pushId"] as? String)
+    }
+
+    static func buildProperties(pushId: String?, properties: [String: Any?] = [:]) -> [String: Any] {
+        var result: [String: Any] = [:]
+
+        if let pushId {
+            result["pushId"] = pushId
+        }
+
+        for (key, value) in properties {
+            if let value {
+                result[key] = value
+            }
+        }
+
+        return result
+    }
+
+    static func capture(_ event: String, pushId: String?, properties: [String: Any?] = [:]) {
+        PaylisherSDK.shared.capture(
+            event,
+            properties: buildProperties(pushId: pushId, properties: properties)
+        )
+    }
+
+    static func capture(_ event: String, userInfo: [AnyHashable: Any], properties: [String: Any?] = [:]) {
+        capture(event, pushId: pushId(from: userInfo), properties: properties)
+    }
+
+    static func registerTrackedCategory() {
+        let center = UNUserNotificationCenter.current()
+        let category = UNNotificationCategory(
+            identifier: trackedCategoryIdentifier,
+            actions: [],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        center.getNotificationCategories { categories in
+            var updatedCategories = categories.filter { $0.identifier != trackedCategoryIdentifier }
+            updatedCategories.insert(category)
+            center.setNotificationCategories(updatedCategories)
+        }
+    }
+}

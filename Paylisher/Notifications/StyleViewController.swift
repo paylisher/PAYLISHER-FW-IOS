@@ -23,6 +23,7 @@ class StyleViewController: UIViewController {
     private let blocks: CustomInAppPayload.Layout.Blocks
 
     private let layoutType: String
+    private let pushId: String?
 
     private let containerView = UIView()
 
@@ -56,13 +57,15 @@ class StyleViewController: UIViewController {
          extra: CustomInAppPayload.Layout.Extra,
          blocks: CustomInAppPayload.Layout.Blocks,
          defaultLang: String,
-         layoutType: String = "modal") {
+         layoutType: String = "modal",
+         pushId: String? = nil) {
         self.style = style
         self.close = close
         self.extra = extra
         self.blocks = blocks
         self.defaultLang = defaultLang
         self.layoutType = layoutType
+        self.pushId = pushId
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -82,7 +85,7 @@ class StyleViewController: UIViewController {
 
         if layoutType == "banner", let duration = extra.banner?.duration, duration > 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(duration)) { [weak self] in
-                self?.didTapClose()
+                self?.dismissInApp(via: "timeout")
             }
         }
     }
@@ -436,7 +439,7 @@ class StyleViewController: UIViewController {
         
         if extra.overlay?.action == "close" {
             
-            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(didTapClose))
+            let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleOverlayClose))
             overlayView.isUserInteractionEnabled = true
             overlayView.addGestureRecognizer(tapGesture)
         }
@@ -614,6 +617,7 @@ class StyleViewController: UIViewController {
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
             wrapper.isUserInteractionEnabled = true
             wrapper.accessibilityIdentifier = action
+            wrapper.accessibilityValue = "text"
             wrapper.addGestureRecognizer(tap)
         }
 
@@ -680,6 +684,7 @@ class StyleViewController: UIViewController {
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapAction(_:)))
             wrapper.isUserInteractionEnabled = true
             wrapper.accessibilityIdentifier = link
+            wrapper.accessibilityValue = "image"
             wrapper.addGestureRecognizer(tap)
         }
 
@@ -855,6 +860,7 @@ class StyleViewController: UIViewController {
 
         let action = block.action ?? ""
         button.accessibilityIdentifier = action
+        button.accessibilityValue = "button"
         button.addTarget(self, action: #selector(handleButtonTap(_:)), for: .touchUpInside)
 
         return button
@@ -896,27 +902,60 @@ class StyleViewController: UIViewController {
 
     @objc private func handleButtonTap(_ sender: UIButton) {
         let action = sender.accessibilityIdentifier ?? ""
+        captureButtonClick(action: action, type: "button", label: sender.currentTitle)
         handleBlockAction(action)
     }
 
     @objc private func handleTapAction(_ gesture: UITapGestureRecognizer) {
         let action = gesture.view?.accessibilityIdentifier ?? ""
+        let type = gesture.view?.accessibilityValue ?? "button"
+        captureButtonClick(action: action, type: type)
         handleBlockAction(action)
     }
 
     private func handleBlockAction(_ action: String) {
         if action.isEmpty || action == "close" {
-            didTapClose()
+            dismissInApp(via: "closeButton")
             return
         }
 
         if let url = URL(string: action) {
             UIApplication.shared.open(url)
         }
-        didTapClose()
+        dismissInApp(via: "intent")
     }
 
     @objc private func didTapClose() {
+        dismissInApp(via: "closeButton")
+    }
+
+    @objc private func handleOverlayClose() {
+        dismissInApp(via: "overlay")
+    }
+
+    private func captureButtonClick(action: String, type: String, label: String? = nil) {
+        var properties: [String: Any?] = [
+            "action": action,
+            "type": type,
+        ]
+        if let label, !label.isEmpty {
+            properties["label"] = label
+        }
+
+        PaylisherNotificationEventTracker.capture(
+            "inappMessageButtonClick",
+            pushId: pushId,
+            properties: properties
+        )
+    }
+
+    private func dismissInApp(via: String) {
+        PaylisherNotificationEventTracker.capture(
+            "inappMessageClose",
+            pushId: pushId,
+            properties: ["via": via]
+        )
+
         guard let transitionType = extra.transition else {
             dismiss(animated: true)
             return
