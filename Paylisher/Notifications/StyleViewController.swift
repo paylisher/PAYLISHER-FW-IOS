@@ -561,12 +561,12 @@ class StyleViewController: UIViewController {
         label.numberOfLines = 0
         label.lineBreakMode = .byWordWrapping
 
-        let font = makeFont(family: block.fontFamily, weight: block.fontWeight, size: block.fontSize)
-        if block.italic == true {
-            label.font = UIFont.italicSystemFont(ofSize: font.pointSize)
-        } else {
-            label.font = font
-        }
+        label.font = makeFont(
+            family: block.fontFamily,
+            weight: block.fontWeight,
+            size: block.fontSize,
+            italic: block.italic == true
+        )
 
         if block.underscore == true {
             let text = label.text ?? ""
@@ -825,7 +825,12 @@ class StyleViewController: UIViewController {
         let title = block.label?[defaultLang] ?? block.label?.values.first ?? ""
         button.setTitle(title, for: .normal)
 
-        let font = makeFont(family: block.fontFamily, weight: block.fontWeight, size: block.fontSize)
+        let font = makeFont(
+            family: block.fontFamily,
+            weight: block.fontWeight,
+            size: block.fontSize,
+            italic: block.italic == true
+        )
         button.titleLabel?.font = font
 
         if let hex = block.textColor, let color = UIColor(hex: hex) {
@@ -853,16 +858,30 @@ class StyleViewController: UIViewController {
         return button
     }
 
-    private func makeFont(family: String?, weight: String?, size: String?) -> UIFont {
-        let fontSize = CGFloat(Double(size ?? "16") ?? 16)
-        let fontWeight: UIFont.Weight = weight == "bold" ? .bold : .regular
+    private func makeFont(family: String?, weight: String?, size: String?, italic: Bool = false) -> UIFont {
+        let rawSize = (size ?? "16").replacingOccurrences(of: "px", with: "")
+        let fontSize = CGFloat(Double(rawSize) ?? 16)
+        let normalizedWeight = (weight ?? "").lowercased()
+        let isBold = normalizedWeight == "bold" || normalizedWeight == "bold_italic"
+        let isItalic = italic || normalizedWeight == "italic" || normalizedWeight == "bold_italic"
+        let fontWeight: UIFont.Weight = isBold ? .bold : .regular
 
-        switch family {
+        let baseFont: UIFont
+        switch family?.lowercased() {
         case "monospace":
-            return .monospacedSystemFont(ofSize: fontSize, weight: fontWeight)
+            baseFont = .monospacedSystemFont(ofSize: fontSize, weight: fontWeight)
         default:
-            return .systemFont(ofSize: fontSize, weight: fontWeight)
+            baseFont = .systemFont(ofSize: fontSize, weight: fontWeight)
         }
+
+        guard isItalic,
+              let descriptor = baseFont.fontDescriptor.withSymbolicTraits(
+                baseFont.fontDescriptor.symbolicTraits.union(.traitItalic)
+              ) else {
+            return baseFont
+        }
+
+        return UIFont(descriptor: descriptor, size: fontSize)
     }
 
     @objc private func handleButtonTap(_ sender: UIButton) {
