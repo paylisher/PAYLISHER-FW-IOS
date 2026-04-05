@@ -714,6 +714,7 @@ class StyleViewController: UIViewController {
         case "large": heightValue = 56
         default: heightValue = 44
         }
+        button.layer.cornerRadius = resolveButtonCornerRadius(block, height: heightValue)
 
         var constraints = [
             button.topAnchor.constraint(equalTo: wrapper.topAnchor, constant: margin),
@@ -804,6 +805,7 @@ class StyleViewController: UIViewController {
             case "large": heightValue = 56
             default: heightValue = 44
             }
+            btn.layer.cornerRadius = resolveButtonCornerRadius(btnData, height: heightValue)
             btn.heightAnchor.constraint(equalToConstant: heightValue).isActive = true
             stack.addArrangedSubview(btn)
         }
@@ -856,6 +858,14 @@ class StyleViewController: UIViewController {
         button.addTarget(self, action: #selector(handleButtonTap(_:)), for: .touchUpInside)
 
         return button
+    }
+
+    private func resolveButtonCornerRadius(
+        _ block: CustomInAppPayload.Layout.Blocks.ButtonGroupBlock.ButtonBlock,
+        height: CGFloat
+    ) -> CGFloat {
+        let requestedRadius = CGFloat(block.borderRadius ?? 8)
+        return min(requestedRadius, height / 2)
     }
 
     private func makeFont(family: String?, weight: String?, size: String?, italic: Bool = false) -> UIFont {
